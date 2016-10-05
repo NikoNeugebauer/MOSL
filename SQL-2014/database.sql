@@ -44,11 +44,12 @@ SELECT @pool = p.name,
     WHERE d.name = DB_NAME()
 		and p.name <> 'default';
 
+
 -- Decode values from the Resource Governor and trans
-SELECT @poolMinMemory = cast(iif( value < value_in_use, value, value_in_use ) as Decimal(9,2)) * @poolMinMemory / 100
+SELECT @poolMinMemory = cast(iif( value < value_in_use, value, value_in_use ) as Decimal(18,2)) * @poolMinMemory / 100
 	FROM sys.configurations
 	WHERE name = 'min server memory (MB)';
-SELECT @poolMaxMemory = cast(iif( value > value_in_use, value, value_in_use ) as Decimal(9,2)) * @poolMaxMemory / 100
+SELECT @poolMaxMemory = cast(iif( value > value_in_use, value, value_in_use ) as Decimal(18,2)) * @poolMaxMemory / 100
 	FROM sys.configurations
 	WHERE name = 'max server memory (MB)'
 
