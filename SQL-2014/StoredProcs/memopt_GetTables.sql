@@ -1,7 +1,7 @@
 /*
 	Memory Optimised Library for SQL Server 2014: 
 	Shows details for the Memory Optimised Tables within the database
-	Version: 0.1.0 Beta, September 2016
+	Version: 0.1.0 Beta, October 2016
 
 	Copyright 2015-2016 Niko Neugebauer, OH22 IS (http://www.nikoport.com/), (http://www.oh22.is/)
 
@@ -49,7 +49,7 @@ GO
 /*
 	Memory Optimised Library for SQL Server 2014: 
 	Shows details for the Memory Optimised Tables within the database
-	Version: 0.1.0 Beta, September 2016
+	Version: 0.1.0 Beta, October 2016
 */
 alter procedure dbo.memopt_GetTables(
 -- Params --

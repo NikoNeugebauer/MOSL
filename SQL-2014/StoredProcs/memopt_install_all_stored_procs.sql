@@ -1,7 +1,7 @@
 /*
 	Memory Optimised Library for SQL Server 2014: 
 	Shows details for the Checkpoint Pair Files
-	Version: 0.1.0 Beta, September 2016
+	Version: 0.1.0 Beta, October 2016
 
 	Copyright 2015-2016 Niko Neugebauer, OH22 IS (http://www.nikoport.com/), (http://www.oh22.is/)
 
@@ -43,7 +43,7 @@ GO
 /*
 	Memory Optimised Library for SQL Server 2014: 
 	Shows details for the Checkpoint Pair Files
-	Version: 0.1.0 Beta, September 2016
+	Version: 0.1.0 Beta, October 2016
 */
 alter procedure dbo.memopt_GetCheckpointFiles(
 -- Params --
@@ -134,7 +134,7 @@ GO
 /*
 	Memory Optimised Library for SQL Server 2014: 
 	Shows details for the Database Configuration
-	Version: 0.1.0 Beta, September 2016
+	Version: 0.1.0 Beta, October 2016
 
 	Copyright 2015-2016 Niko Neugebauer, OH22 IS (http://www.nikoport.com/), (http://www.oh22.is/)
 
@@ -182,7 +182,7 @@ GO
 /*
 	Memory Optimised Library for SQL Server 2014: 
 	Shows details for the Database Configuration
-	Version: 0.1.0 Beta, September 2016
+	Version: 0.1.0 Beta, October 2016
 */
 alter procedure dbo.memopt_GetDatabaseInfo(
 -- Params --
@@ -251,7 +251,7 @@ GO
 /*
 	Memory Optimised Library for SQL Server 2014: 
 	Shows details for the Garbage Collector
-	Version: 0.1.0 Beta, September 2016
+	Version: 0.1.0 Beta, October 2016
 
 	Copyright 2015-2016 Niko Neugebauer, OH22 IS (http://www.nikoport.com/), (http://www.oh22.is/)
 
@@ -299,7 +299,7 @@ GO
 /*
 	Memory Optimised Library for SQL Server 2014: 
 	Shows details for the Garbage Collector
-	Version: 0.1.0 Beta, September 2016
+	Version: 0.1.0 Beta, October 2016
 */
 alter procedure dbo.memopt_GetGarbageCollector
 -- Params --
@@ -340,7 +340,7 @@ GO
 /*
 	Memory Optimised Library for SQL Server 2014: 
 	Shows details for the Hash Indexes of the Memory Optimized Tables
-	Version: 0.1.0 Beta, September 2016
+	Version: 0.1.0 Beta, October 2016
 
 	Copyright 2015-2016 Niko Neugebauer, OH22 IS (http://www.nikoport.com/), (http://www.oh22.is/)
 
@@ -388,7 +388,7 @@ GO
 /*
 	Memory Optimised Library for SQL Server 2014: 
 	Shows details for the Hash Indexes of the Memory Optimized Tables
-	Version: 0.1.0 Beta, September 2016
+	Version: 0.1.0 Beta, October 2016
 */
 alter procedure dbo.memopt_GetHashIndexes(
 -- Params --
@@ -436,7 +436,7 @@ GO
 /*
 	Memory Optimised Library for SQL Server 2014: 
 	Shows details for the Loaded Memory Optimized Modules
-	Version: 0.1.0 Beta, September 2016
+	Version: 0.1.0 Beta, October 2016
 
 	Copyright 2015-2016 Niko Neugebauer, OH22 IS (http://www.nikoport.com/), (http://www.oh22.is/)
 
@@ -484,7 +484,7 @@ GO
 /*
 	Memory Optimised Library for SQL Server 2014: 
 	Shows details for the Loaded Memory Optimized Modules
-	Version: 0.1.0 Beta, September 2016
+	Version: 0.1.0 Beta, October 2016
 */
 alter procedure dbo.memopt_GetLoadedModules(
 -- Params --
@@ -530,7 +530,7 @@ GO
 /*
 	Memory Optimised Library for SQL Server 2014: 
 	Shows details for the Memory Optimised Objects within the database
-	Version: 0.1.0 Beta, September 2016
+	Version: 0.1.0 Beta, October 2016
 
 	Copyright 2015-2016 Niko Neugebauer, OH22 IS (http://www.nikoport.com/), (http://www.oh22.is/)
 
@@ -578,7 +578,7 @@ GO
 /*
 	Memory Optimised Library for SQL Server 2014: 
 	Shows details for the Memory Optimised Objects within the database
-	Version: 0.1.0 Beta, September 2016
+	Version: 0.1.0 Beta, October 2016
 */
 alter procedure dbo.memopt_GetObjects(
 -- Params --
@@ -733,7 +733,7 @@ GO
 /*
 	Memory Optimised Library for SQL Server 2014: 
 	SQL Server Instance Information - Provides with the list of the known SQL Server versions that have bugfixes or improvements over your current version + lists currently enabled trace flags on the instance & session
-	Version: 0.1.0 Beta, September 2016
+	Version: 0.1.0 Beta, October 2016
 
 	Copyright 2015-2016 Niko Neugebauer, OH22 IS (http://www.nikoport.com/), (http://www.oh22.is/)
 
@@ -781,7 +781,7 @@ GO
 /*
 	Memory Optimised Library for SQL Server 2014: 
 	SQL Server Instance Information - Provides with the list of the known SQL Server versions that have bugfixes or improvements over your current version + lists currently enabled trace flags on the instance & session
-	Version: 0.1.0 Beta, September 2016
+	Version: 0.1.0 Beta, October 2016
 */
 alter procedure dbo.memopt_GetSQLInfo(
 -- Params --
@@ -994,7 +994,7 @@ GO
 /*
 	Memory Optimised Library for SQL Server 2014: 
 	Shows details for the Memory Optimised Tables within the database
-	Version: 0.1.0 Beta, September 2016
+	Version: 0.1.0 Beta, October 2016
 
 	Copyright 2015-2016 Niko Neugebauer, OH22 IS (http://www.nikoport.com/), (http://www.oh22.is/)
 
@@ -1042,7 +1042,7 @@ GO
 /*
 	Memory Optimised Library for SQL Server 2014: 
 	Shows details for the Memory Optimised Tables within the database
-	Version: 0.1.0 Beta, September 2016
+	Version: 0.1.0 Beta, October 2016
 */
 alter procedure dbo.memopt_GetTables(
 -- Params --
