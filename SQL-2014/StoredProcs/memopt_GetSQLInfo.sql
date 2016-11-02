@@ -1,7 +1,7 @@
 /*
 	Memory Optimised Library for SQL Server 2014: 
 	SQL Server Instance Information - Provides with the list of the known SQL Server versions that have bugfixes or improvements over your current version + lists currently enabled trace flags on the instance & session
-	Version: 0.1.0 Beta, October 2016
+	Version: 0.2.0, November 2016
 
 	Copyright 2015-2016 Niko Neugebauer, OH22 IS (http://www.nikoport.com/), (http://www.oh22.is/)
 
@@ -49,7 +49,7 @@ GO
 /*
 	Memory Optimised Library for SQL Server 2014: 
 	SQL Server Instance Information - Provides with the list of the known SQL Server versions that have bugfixes or improvements over your current version + lists currently enabled trace flags on the instance & session
-	Version: 0.1.0 Beta, October 2016
+	Version: 0.2.0, November 2016
 */
 alter procedure dbo.memopt_GetSQLInfo(
 -- Params --
@@ -127,8 +127,10 @@ begin
 		( 'SP1', 4457, convert(datetime,'31-05-2016',105), 'CU 6A for SQL Server 2014 SP1' ),
 		( 'SP1', 4459, convert(datetime,'20-06-2016',105), 'CU 7 for SQL Server 2014 SP1' ),
 		( 'SP1', 4468, convert(datetime,'15-08-2016',105), 'CU 8 for SQL Server 2014 SP1' ),
+		( 'SP1', 4474, convert(datetime,'18-10-2016',105), 'CU 9 for SQL Server 2014 SP1' ),
 		( 'SP2', 5000, convert(datetime,'11-07-2016',105), 'SQL Server 2014 SP2' ),
-		( 'SP2', 5511, convert(datetime,'25-08-2016',105), 'CU 1 for SQL Server 2014 SP2' );
+		( 'SP2', 5511, convert(datetime,'25-08-2016',105), 'CU 1 for SQL Server 2014 SP2' ),
+		( 'SP2', 5522, convert(datetime,'18-10-2016',105), 'CU 2 for SQL Server 2014 SP2' );
 
 
 	insert into #SQLMemOptImprovements (BuildVersion, SQLBranch, Description, URL )
@@ -208,15 +210,18 @@ begin
 		drop table #TempVersionResults;
 	end
 
-	select imps.BuildVersion, vers.SQLVersionDescription, imps.Description, imps.URL
+	select min(imps.BuildVersion) as BuildVersion, min(vers.SQLVersionDescription) as SQLVersionDescription, imps.Description, imps.URL
 		from #SQLMemOptImprovements imps
 			inner join #SQLBranches branch
 				on imps.SQLBranch = branch.SQLBranch
 			inner join #SQLVersions vers
 				on imps.BuildVersion = vers.SQLVersion
 		where BuildVersion > @SQLServerBuild 
-			and branch.SQLBranch = ServerProperty('ProductLevel')
-			and branch.MinVersion < BuildVersion;
+			and branch.SQLBranch >= ServerProperty('ProductLevel')
+			and branch.MinVersion < BuildVersion
+		group by Description, URL, SQLVersionDescription
+		having min(imps.BuildVersion) = (select min(imps2.BuildVersion)	from #SQLMemOptImprovements imps2 where imps.Description = imps2.Description and imps2.BuildVersion > @SQLServerBuild group by imps2.Description)
+		order by BuildVersion;
 
 	drop table #SQLMemOptImprovements;
 	drop table #SQLBranches;
