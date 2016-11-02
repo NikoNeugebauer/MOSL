@@ -1,7 +1,7 @@
 /*
 	Memory Optimised Library for SQL Server 2014: 
 	Shows details for the Database Configuration
-	Version: 0.1.0 Beta, October 2016
+	Version: 0.2.0, November 2016
 
 	Copyright 2015-2016 Niko Neugebauer, OH22 IS (http://www.nikoport.com/), (http://www.oh22.is/)
 
@@ -49,7 +49,7 @@ GO
 /*
 	Memory Optimised Library for SQL Server 2014: 
 	Shows details for the Database Configuration
-	Version: 0.1.0 Beta, October 2016
+	Version: 0.2.0, November 2016
 */
 alter procedure dbo.memopt_GetDatabaseInfo(
 -- Params --
@@ -103,6 +103,7 @@ begin
 	/* Display the Information */
 	SELECT DB_NAME() as DbName, 
 		case when @MemOptFileGroup IS NULL then 'Disabled' else 'Enabled' end as MemoryOptimised,
+		case @dbMemElevateSnapshot when 1 then 'true' else 'false' end as ElevateSnapshot,
 		@MemOptFileGroup as FileGroup, 
 		@MemOptFileName as FileName,
 		@MemOptFilePath as FilePath,

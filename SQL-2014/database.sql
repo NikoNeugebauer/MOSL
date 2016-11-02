@@ -1,7 +1,7 @@
 /*
 	Memory Optimised Library for SQL Server 2014: 
 	Shows details for the Database Configuration
-	Version: 0.1.0 Beta, October 2016
+	Version: 0.2.0, November 2016
 
 	Copyright 2015-2016 Niko Neugebauer, OH22 IS (http://www.nikoport.com/), (http://www.oh22.is/)
 
@@ -32,12 +32,14 @@ DECLARE @pool SYSNAME,
 		@MemOptFileName NVARCHAR(512) = NULL,
 		@MemOptFilePath NVARCHAR(2048) = NULL,
 		@MemOptStatus VARCHAR(20) = NULL,
-		@MemOptTables INT = 0;
+		@MemOptTables INT = 0,
+		@dbMemElevateSnapshot bit = 0;
 
 -- Check if the current database is bound to a resource pool
 SELECT @pool = p.name,
 	   @poolMinMemory = p.min_memory_percent,
-	   @poolMaxMemory = p.max_memory_percent
+	   @poolMaxMemory = p.max_memory_percent,
+	   @dbMemElevateSnapshot = d.is_memory_optimized_elevate_to_snapshot_on
     FROM sys.databases d
 		INNER JOIN sys.resource_governor_resource_pools p
 			ON d.resource_pool_id = p.pool_id
@@ -70,6 +72,7 @@ SELECT @MemOptTables = count(1) from sys.tables where is_memory_optimized = 1;
 /* Display the Information */
 SELECT DB_NAME() as DbName, 
 	case when @MemOptFileGroup IS NULL then 'Disabled' else 'Enabled' end as MemoryOptimised,
+	case @dbMemElevateSnapshot when 1 then 'true' else 'false' end as ElevateSnapshot,
 	@MemOptFileGroup as FileGroup, 
 	@MemOptFileName as FileName,
 	@MemOptFilePath as FilePath,
