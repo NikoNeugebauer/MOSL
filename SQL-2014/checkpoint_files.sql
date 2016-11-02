@@ -1,7 +1,7 @@
 /*
 	Memory Optimised Library for SQL Server 2014: 
 	Shows details for the Checkpoint Pair Files
-	Version: 0.1.0 Beta, October 2016
+	Version: 0.2.0, November 2016
 
 	Copyright 2015-2016 Niko Neugebauer, OH22 IS (http://www.nikoport.com/), (http://www.oh22.is/)
 
@@ -47,7 +47,8 @@ end
 
 set nocount on;
 
-SELECT count(*) as TotalFiles
+SELECT DB_NAME() as DatabaseName
+	,count(*) as TotalFiles
 	,SUM(case file_type when 1 then 1 when 0 then 1 else 0 end) / 2 as FilePairs
 	,cast(SUM((file_size_in_bytes)/(1024.*1024*1024)) as Decimal(9,3)) as ReservedSizeInGB
 	,cast(SUM((file_size_used_in_bytes)/(1024.*1024*1024)) as Decimal(9,3)) as UsedSizeInGB
