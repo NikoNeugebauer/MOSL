@@ -1,7 +1,7 @@
 /*
 	Memory Optimised Library for SQL Server 2014: 
 	Shows details for the Loaded Memory Optimized Modules
-	Version: 0.1.0 Beta, October 2016
+	Version: 0.2.0, November 2016
 
 	Copyright 2015-2016 Niko Neugebauer, OH22 IS (http://www.nikoport.com/), (http://www.oh22.is/)
 
@@ -21,9 +21,17 @@
 SELECT 
 	obj.object_id as ObjectId,
 	quotename(object_schema_name(obj.object_id)) + '.' + quotename(object_name(obj.object_id)) as ObjectName,
-	obj.type_desc as ObjectType,
+	case obj.type_desc 
+		when 'USER_TABLE' then 'Table' 
+		when 'TABLE_TYPE' then 'Table Type' 
+		when 'SQL_TRIGGER' then 'Trigger' 
+		when 'SQL_STORED_PROCEDURE' then 'Stored Proc'
+		when 'SQL_INLINE_TABLE_VALUED_FUNCTION' then 'Inline Table Valued Function'
+		when 'SQL_SCALAR_FUNCTION' then 'Scalar Function'
+		when 'SQL_TABLE_VALUED_FUNCTION' then 'Table Valued Function'
+	end as ObjectType,
 	md.name as FilePath,	
-	--md.description, 
+	md.description, 
 	--md.file_version,
 	--md.product_version,
 	--substring(md.name, 0, len(md.name) - charindex('_',reverse(md.name)) + 1 ),
