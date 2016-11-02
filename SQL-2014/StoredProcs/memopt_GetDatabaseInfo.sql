@@ -65,12 +65,14 @@ alter procedure dbo.memopt_GetDatabaseInfo(
 begin
 	set nocount on;
 
-	DECLARE @pool SYSNAME;
+	DECLARE @pool SYSNAME,
+			@dbMemElevateSnapshot bit = 0;
 
 	-- Check if the current database is bound to a resource pool
 	SELECT @pool = p.name,
 		   @poolMinMemory = p.min_memory_percent,
-		   @poolMaxMemory = p.max_memory_percent
+		   @poolMaxMemory = p.max_memory_percent,
+		   @dbMemElevateSnapshot = d.is_memory_optimized_elevate_to_snapshot_on
 		FROM sys.databases d
 			INNER JOIN sys.resource_governor_resource_pools p
 				ON d.resource_pool_id = p.pool_id
