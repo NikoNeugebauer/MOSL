@@ -26,7 +26,6 @@ declare @minEmptyBucketPercent Decimal(9,2) = NULL,		-- Filters the Indexes by t
 		@minMaxChainLrngth bigint = 0,					-- Allows to filter the indexes with the number of Maximum Chain length equals or superior the parameter value
 		@schemaName nvarchar(256) = NULL,				-- Allows to show data filtered down to the specified schema		
 		@tableName nvarchar(256) = NULL					-- Allows to show data filtered down to the specified table name pattern
-
 -- end of --
 
 declare @SQLServerVersion nvarchar(128) = cast(SERVERPROPERTY('ProductVersion') as NVARCHAR(128)), 

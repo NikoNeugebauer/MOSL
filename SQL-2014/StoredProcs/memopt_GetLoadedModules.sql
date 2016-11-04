@@ -53,13 +53,8 @@ GO
 */
 alter procedure dbo.memopt_GetLoadedModules(
 -- Params --
-	@poolMinMemory Decimal(9,2) = NULL,
-	@poolMaxMemory Decimal(9,2) = NULL,
-	@MemOptFileGroup NVARCHAR(512) = NULL,
-	@MemOptFileName NVARCHAR(512) = NULL,
-	@MemOptFilePath NVARCHAR(2048) = NULL,
-	@MemOptStatus VARCHAR(20) = NULL,
-	@MemOptTables INT = 0
+	@objectName nvarchar(128) = NULL,							-- Allows to filter by the name of the object
+	@objectType varchar(20) = NULL								-- Allows to filter the type of the Memory-Optimised object
 -- end of --
 ) as 
 begin
@@ -94,6 +89,16 @@ begin
 		WHERE description = 'XTP Native DLL'  
 			AND substring(substring(md.name, 0, len(md.name) - charindex('_',reverse(md.name)) + 1 ), 
 				  len(substring(md.name, 0, len(md.name) - charindex('_',reverse(md.name)) + 1 )) - charindex('_', reverse(substring(md.name, 0, len(md.name) - charindex('_',reverse(md.name)) + 1 ))) + 2, 10 ) = cast(DB_ID() as varchar(10))	
+			AND quotename(object_name(obj.object_id)) like '%' + isnull(@objectName,'') + '%'
+			AND(case obj.type_desc 
+					when 'USER_TABLE' then 'Table' 
+					when 'TABLE_TYPE' then 'Table Type' 
+					when 'SQL_TRIGGER' then 'Trigger' 
+					when 'SQL_STORED_PROCEDURE' then 'Stored Proc'
+					when 'SQL_INLINE_TABLE_VALUED_FUNCTION' then 'Inline Table Valued Function'
+					when 'SQL_SCALAR_FUNCTION' then 'Scalar Function'
+					when 'SQL_TABLE_VALUED_FUNCTION' then 'Table Valued Function'
+				end = @objectType OR @objectType IS NULL )
 		ORDER BY quotename(object_schema_name(obj.object_id)) + '.' + quotename(object_name(obj.object_id));
 
 END

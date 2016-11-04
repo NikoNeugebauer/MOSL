@@ -42,3 +42,5 @@ if EXISTS (select * from sys.objects where type = 'p' and name = 'memopt_GetSQLI
 if EXISTS (select * from sys.objects where type = 'p' and name = 'memopt_GetTables' and schema_id = SCHEMA_ID('dbo') )
 	drop procedure dbo.memopt_GetTables;
 
+if EXISTS (select * from sys.objects where type = 'p' and name = 'memopt_SuggestedTables' and schema_id = SCHEMA_ID('dbo') )
+	drop procedure dbo.memopt_SuggestedTables;

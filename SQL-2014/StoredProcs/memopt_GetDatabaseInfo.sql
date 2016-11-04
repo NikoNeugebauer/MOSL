@@ -51,22 +51,24 @@ GO
 	Shows details for the Database Configuration
 	Version: 0.2.0, November 2016
 */
-alter procedure dbo.memopt_GetDatabaseInfo(
+alter procedure dbo.memopt_GetDatabaseInfo--(
 -- Params --
-	@poolMinMemory Decimal(9,2) = NULL,
-	@poolMaxMemory Decimal(9,2) = NULL,
-	@MemOptFileGroup NVARCHAR(512) = NULL,
-	@MemOptFileName NVARCHAR(512) = NULL,
-	@MemOptFilePath NVARCHAR(2048) = NULL,
-	@MemOptStatus VARCHAR(20) = NULL,
-	@MemOptTables INT = 0
 -- end of --
-) as 
+--) 
+as 
 begin
 	set nocount on;
 
 	DECLARE @pool SYSNAME,
-			@dbMemElevateSnapshot bit = 0;
+			@dbMemElevateSnapshot bit = 0,
+		    @poolMinMemory Decimal(9,2) = NULL,
+			@poolMaxMemory Decimal(9,2) = NULL,
+			@MemOptFileGroup NVARCHAR(512) = NULL,
+			@MemOptFileName NVARCHAR(512) = NULL,
+			@MemOptFilePath NVARCHAR(2048) = NULL,
+			@MemOptStatus VARCHAR(20) = NULL,
+			@memOptTables INT = 0;
+
 
 	-- Check if the current database is bound to a resource pool
 	SELECT @pool = p.name,

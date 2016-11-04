@@ -25,6 +25,25 @@ Modifications:
 
 */
 
+declare @SQLServerVersion nvarchar(128) = cast(SERVERPROPERTY('ProductVersion') as NVARCHAR(128)), 
+		@SQLServerEdition nvarchar(128) = cast(SERVERPROPERTY('Edition') as NVARCHAR(128));
+declare @errorMessage nvarchar(512);
+
+ --Ensure that we are running SQL Server 2014
+if substring(@SQLServerVersion,1,CHARINDEX('.',@SQLServerVersion)-1) <> N'12'
+begin
+	set @errorMessage = (N'You are not running a SQL Server 2014. Your SQL Server version is ' + @SQLServerVersion);
+	Throw 51000, @errorMessage, 1;
+end
+
+if SERVERPROPERTY('EngineEdition') <> 3 
+begin
+	set @errorMessage = (N'Your SQL Server 2014 Edition is not an Enterprise or a Developer Edition: Your are running a ' + @SQLServerEdition);
+	Throw 51000, @errorMessage, 1;
+end
+
+set nocount on;
+
 DECLARE @pool SYSNAME,
 		@poolMinMemory Decimal(9,2) = NULL,
 		@poolMaxMemory Decimal(9,2) = NULL,

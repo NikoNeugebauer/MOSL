@@ -1,7 +1,7 @@
 /*
 	Memory Optimised Library for SQL Server 2014: 
 	Shows details for the Checkpoint Pair Files
-	Version: 0.1.0 Beta, October 2016
+	Version: 0.2.0, November 2016
 
 	Copyright 2015-2016 Niko Neugebauer, OH22 IS (http://www.nikoport.com/), (http://www.oh22.is/)
 
@@ -43,7 +43,7 @@ GO
 /*
 	Memory Optimised Library for SQL Server 2014: 
 	Shows details for the Checkpoint Pair Files
-	Version: 0.1.0 Beta, October 2016
+	Version: 0.2.0, November 2016
 */
 alter procedure dbo.memopt_GetCheckpointFiles(
 -- Params --
@@ -60,7 +60,8 @@ begin
 	set nocount on;
 
 	
-	SELECT count(*) as TotalFiles
+	SELECT DB_NAME() as DatabaseName
+		,count(*) as TotalFiles
 		,SUM(case file_type when 1 then 1 when 0 then 1 else 0 end) / 2 as FilePairs
 		,cast(SUM((file_size_in_bytes)/(1024.*1024*1024)) as Decimal(9,3)) as ReservedSizeInGB
 		,cast(SUM((file_size_used_in_bytes)/(1024.*1024*1024)) as Decimal(9,3)) as UsedSizeInGB
@@ -134,7 +135,7 @@ GO
 /*
 	Memory Optimised Library for SQL Server 2014: 
 	Shows details for the Database Configuration
-	Version: 0.1.0 Beta, October 2016
+	Version: 0.2.0, November 2016
 
 	Copyright 2015-2016 Niko Neugebauer, OH22 IS (http://www.nikoport.com/), (http://www.oh22.is/)
 
@@ -182,28 +183,32 @@ GO
 /*
 	Memory Optimised Library for SQL Server 2014: 
 	Shows details for the Database Configuration
-	Version: 0.1.0 Beta, October 2016
+	Version: 0.2.0, November 2016
 */
-alter procedure dbo.memopt_GetDatabaseInfo(
+alter procedure dbo.memopt_GetDatabaseInfo--(
 -- Params --
-	@poolMinMemory Decimal(9,2) = NULL,
-	@poolMaxMemory Decimal(9,2) = NULL,
-	@MemOptFileGroup NVARCHAR(512) = NULL,
-	@MemOptFileName NVARCHAR(512) = NULL,
-	@MemOptFilePath NVARCHAR(2048) = NULL,
-	@MemOptStatus VARCHAR(20) = NULL,
-	@MemOptTables INT = 0
 -- end of --
-) as 
+--) 
+as 
 begin
 	set nocount on;
 
-	DECLARE @pool SYSNAME;
+	DECLARE @pool SYSNAME,
+			@dbMemElevateSnapshot bit = 0,
+		    @poolMinMemory Decimal(9,2) = NULL,
+			@poolMaxMemory Decimal(9,2) = NULL,
+			@MemOptFileGroup NVARCHAR(512) = NULL,
+			@MemOptFileName NVARCHAR(512) = NULL,
+			@MemOptFilePath NVARCHAR(2048) = NULL,
+			@MemOptStatus VARCHAR(20) = NULL,
+			@memOptTables INT = 0;
+
 
 	-- Check if the current database is bound to a resource pool
 	SELECT @pool = p.name,
 		   @poolMinMemory = p.min_memory_percent,
-		   @poolMaxMemory = p.max_memory_percent
+		   @poolMaxMemory = p.max_memory_percent,
+		   @dbMemElevateSnapshot = d.is_memory_optimized_elevate_to_snapshot_on
 		FROM sys.databases d
 			INNER JOIN sys.resource_governor_resource_pools p
 				ON d.resource_pool_id = p.pool_id
@@ -236,6 +241,7 @@ begin
 	/* Display the Information */
 	SELECT DB_NAME() as DbName, 
 		case when @MemOptFileGroup IS NULL then 'Disabled' else 'Enabled' end as MemoryOptimised,
+		case @dbMemElevateSnapshot when 1 then 'true' else 'false' end as ElevateSnapshot,
 		@MemOptFileGroup as FileGroup, 
 		@MemOptFileName as FileName,
 		@MemOptFilePath as FilePath,
@@ -251,7 +257,7 @@ GO
 /*
 	Memory Optimised Library for SQL Server 2014: 
 	Shows details for the Garbage Collector
-	Version: 0.1.0 Beta, October 2016
+	Version: 0.2.0, November 2016
 
 	Copyright 2015-2016 Niko Neugebauer, OH22 IS (http://www.nikoport.com/), (http://www.oh22.is/)
 
@@ -278,7 +284,7 @@ declare @SQLServerVersion nvarchar(128) = cast(SERVERPROPERTY('ProductVersion') 
 		@SQLServerEdition nvarchar(128) = cast(SERVERPROPERTY('Edition') as NVARCHAR(128));
 declare @errorMessage nvarchar(512);
 
- --Ensure that we are running SQL Server 2014
+-- Ensure that we are running SQL Server 2014
 if substring(@SQLServerVersion,1,CHARINDEX('.',@SQLServerVersion)-1) <> N'12'
 begin
 	set @errorMessage = (N'You are not running a SQL Server 2014. Your SQL Server version is ' + @SQLServerVersion);
@@ -299,7 +305,7 @@ GO
 /*
 	Memory Optimised Library for SQL Server 2014: 
 	Shows details for the Garbage Collector
-	Version: 0.1.0 Beta, October 2016
+	Version: 0.2.0, November 2016
 */
 alter procedure dbo.memopt_GetGarbageCollector
 -- Params --
@@ -340,7 +346,7 @@ GO
 /*
 	Memory Optimised Library for SQL Server 2014: 
 	Shows details for the Hash Indexes of the Memory Optimized Tables
-	Version: 0.1.0 Beta, October 2016
+	Version: 0.2.0, November 2016
 
 	Copyright 2015-2016 Niko Neugebauer, OH22 IS (http://www.nikoport.com/), (http://www.oh22.is/)
 
@@ -388,7 +394,7 @@ GO
 /*
 	Memory Optimised Library for SQL Server 2014: 
 	Shows details for the Hash Indexes of the Memory Optimized Tables
-	Version: 0.1.0 Beta, October 2016
+	Version: 0.2.0, November 2016
 */
 alter procedure dbo.memopt_GetHashIndexes(
 -- Params --
@@ -436,7 +442,7 @@ GO
 /*
 	Memory Optimised Library for SQL Server 2014: 
 	Shows details for the Loaded Memory Optimized Modules
-	Version: 0.1.0 Beta, October 2016
+	Version: 0.2.0, November 2016
 
 	Copyright 2015-2016 Niko Neugebauer, OH22 IS (http://www.nikoport.com/), (http://www.oh22.is/)
 
@@ -484,17 +490,12 @@ GO
 /*
 	Memory Optimised Library for SQL Server 2014: 
 	Shows details for the Loaded Memory Optimized Modules
-	Version: 0.1.0 Beta, October 2016
+	Version: 0.2.0, November 2016
 */
 alter procedure dbo.memopt_GetLoadedModules(
 -- Params --
-	@poolMinMemory Decimal(9,2) = NULL,
-	@poolMaxMemory Decimal(9,2) = NULL,
-	@MemOptFileGroup NVARCHAR(512) = NULL,
-	@MemOptFileName NVARCHAR(512) = NULL,
-	@MemOptFilePath NVARCHAR(2048) = NULL,
-	@MemOptStatus VARCHAR(20) = NULL,
-	@MemOptTables INT = 0
+	@objectName nvarchar(128) = NULL,							-- Allows to filter by the name of the object
+	@objectType varchar(20) = NULL								-- Allows to filter the type of the Memory-Optimised object
 -- end of --
 ) as 
 begin
@@ -503,9 +504,17 @@ begin
 	SELECT 
 		obj.object_id as ObjectId,
 		quotename(object_schema_name(obj.object_id)) + '.' + quotename(object_name(obj.object_id)) as ObjectName,
-		obj.type_desc as ObjectType,
+		case obj.type_desc 
+			when 'USER_TABLE' then 'Table' 
+			when 'TABLE_TYPE' then 'Table Type' 
+			when 'SQL_TRIGGER' then 'Trigger' 
+			when 'SQL_STORED_PROCEDURE' then 'Stored Proc'
+			when 'SQL_INLINE_TABLE_VALUED_FUNCTION' then 'Inline Table Valued Function'
+			when 'SQL_SCALAR_FUNCTION' then 'Scalar Function'
+			when 'SQL_TABLE_VALUED_FUNCTION' then 'Table Valued Function'
+		end as ObjectType,
 		md.name as FilePath,	
-		--md.description, 
+		md.description, 
 		--md.file_version,
 		--md.product_version,
 		--substring(md.name, 0, len(md.name) - charindex('_',reverse(md.name)) + 1 ),
@@ -521,6 +530,16 @@ begin
 		WHERE description = 'XTP Native DLL'  
 			AND substring(substring(md.name, 0, len(md.name) - charindex('_',reverse(md.name)) + 1 ), 
 				  len(substring(md.name, 0, len(md.name) - charindex('_',reverse(md.name)) + 1 )) - charindex('_', reverse(substring(md.name, 0, len(md.name) - charindex('_',reverse(md.name)) + 1 ))) + 2, 10 ) = cast(DB_ID() as varchar(10))	
+			AND quotename(object_name(obj.object_id)) like '%' + isnull(@objectName,'') + '%'
+			AND(case obj.type_desc 
+					when 'USER_TABLE' then 'Table' 
+					when 'TABLE_TYPE' then 'Table Type' 
+					when 'SQL_TRIGGER' then 'Trigger' 
+					when 'SQL_STORED_PROCEDURE' then 'Stored Proc'
+					when 'SQL_INLINE_TABLE_VALUED_FUNCTION' then 'Inline Table Valued Function'
+					when 'SQL_SCALAR_FUNCTION' then 'Scalar Function'
+					when 'SQL_TABLE_VALUED_FUNCTION' then 'Table Valued Function'
+				end = @objectType OR @objectType IS NULL )
 		ORDER BY quotename(object_schema_name(obj.object_id)) + '.' + quotename(object_name(obj.object_id));
 
 END
@@ -530,7 +549,7 @@ GO
 /*
 	Memory Optimised Library for SQL Server 2014: 
 	Shows details for the Memory Optimised Objects within the database
-	Version: 0.1.0 Beta, October 2016
+	Version: 0.2.0, November 2016
 
 	Copyright 2015-2016 Niko Neugebauer, OH22 IS (http://www.nikoport.com/), (http://www.oh22.is/)
 
@@ -578,7 +597,7 @@ GO
 /*
 	Memory Optimised Library for SQL Server 2014: 
 	Shows details for the Memory Optimised Objects within the database
-	Version: 0.1.0 Beta, October 2016
+	Version: 0.2.0, November 2016
 */
 alter procedure dbo.memopt_GetObjects(
 -- Params --
@@ -733,7 +752,7 @@ GO
 /*
 	Memory Optimised Library for SQL Server 2014: 
 	SQL Server Instance Information - Provides with the list of the known SQL Server versions that have bugfixes or improvements over your current version + lists currently enabled trace flags on the instance & session
-	Version: 0.1.0 Beta, October 2016
+	Version: 0.2.0, November 2016
 
 	Copyright 2015-2016 Niko Neugebauer, OH22 IS (http://www.nikoport.com/), (http://www.oh22.is/)
 
@@ -781,7 +800,7 @@ GO
 /*
 	Memory Optimised Library for SQL Server 2014: 
 	SQL Server Instance Information - Provides with the list of the known SQL Server versions that have bugfixes or improvements over your current version + lists currently enabled trace flags on the instance & session
-	Version: 0.1.0 Beta, October 2016
+	Version: 0.2.0, November 2016
 */
 alter procedure dbo.memopt_GetSQLInfo(
 -- Params --
@@ -859,8 +878,10 @@ begin
 		( 'SP1', 4457, convert(datetime,'31-05-2016',105), 'CU 6A for SQL Server 2014 SP1' ),
 		( 'SP1', 4459, convert(datetime,'20-06-2016',105), 'CU 7 for SQL Server 2014 SP1' ),
 		( 'SP1', 4468, convert(datetime,'15-08-2016',105), 'CU 8 for SQL Server 2014 SP1' ),
+		( 'SP1', 4474, convert(datetime,'18-10-2016',105), 'CU 9 for SQL Server 2014 SP1' ),
 		( 'SP2', 5000, convert(datetime,'11-07-2016',105), 'SQL Server 2014 SP2' ),
-		( 'SP2', 5511, convert(datetime,'25-08-2016',105), 'CU 1 for SQL Server 2014 SP2' );
+		( 'SP2', 5511, convert(datetime,'25-08-2016',105), 'CU 1 for SQL Server 2014 SP2' ),
+		( 'SP2', 5522, convert(datetime,'18-10-2016',105), 'CU 2 for SQL Server 2014 SP2' );
 
 
 	insert into #SQLMemOptImprovements (BuildVersion, SQLBranch, Description, URL )
@@ -940,15 +961,18 @@ begin
 		drop table #TempVersionResults;
 	end
 
-	select imps.BuildVersion, vers.SQLVersionDescription, imps.Description, imps.URL
+	select min(imps.BuildVersion) as BuildVersion, min(vers.SQLVersionDescription) as SQLVersionDescription, imps.Description, imps.URL
 		from #SQLMemOptImprovements imps
 			inner join #SQLBranches branch
 				on imps.SQLBranch = branch.SQLBranch
 			inner join #SQLVersions vers
 				on imps.BuildVersion = vers.SQLVersion
 		where BuildVersion > @SQLServerBuild 
-			and branch.SQLBranch = ServerProperty('ProductLevel')
-			and branch.MinVersion < BuildVersion;
+			and branch.SQLBranch >= ServerProperty('ProductLevel')
+			and branch.MinVersion < BuildVersion
+		group by Description, URL, SQLVersionDescription
+		having min(imps.BuildVersion) = (select min(imps2.BuildVersion)	from #SQLMemOptImprovements imps2 where imps.Description = imps2.Description and imps2.BuildVersion > @SQLServerBuild group by imps2.Description)
+		order by BuildVersion;
 
 	drop table #SQLMemOptImprovements;
 	drop table #SQLBranches;
@@ -994,7 +1018,7 @@ GO
 /*
 	Memory Optimised Library for SQL Server 2014: 
 	Shows details for the Memory Optimised Tables within the database
-	Version: 0.1.0 Beta, October 2016
+	Version: 0.2.0, November 2016
 
 	Copyright 2015-2016 Niko Neugebauer, OH22 IS (http://www.nikoport.com/), (http://www.oh22.is/)
 
@@ -1042,7 +1066,7 @@ GO
 /*
 	Memory Optimised Library for SQL Server 2014: 
 	Shows details for the Memory Optimised Tables within the database
-	Version: 0.1.0 Beta, October 2016
+	Version: 0.2.0, November 2016
 */
 alter procedure dbo.memopt_GetTables(
 -- Params --
@@ -1109,3 +1133,441 @@ END
 
 GO
 
+/*
+	Memory Optimised Library for SQL Server 2014: 
+	Suggested Tables - Shows details for the suggessted Memory Optimised Tables within the database
+	Version: 0.2.0, November 2016
+
+	Copyright 2015-2016 Niko Neugebauer, OH22 IS (http://www.nikoport.com/columnstore/), (http://www.oh22.is/)
+
+	Licensed under the Apache License, Version 2.0 (the "License");
+	you may not use this file except in compliance with the License.
+	You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+*/
+
+declare @SQLServerVersion nvarchar(128) = cast(SERVERPROPERTY('ProductVersion') as NVARCHAR(128)), 
+		@SQLServerEdition nvarchar(128) = cast(SERVERPROPERTY('Edition') as NVARCHAR(128));
+declare @errorMessage nvarchar(512);
+
+ --Ensure that we are running SQL Server 2014
+if substring(@SQLServerVersion,1,CHARINDEX('.',@SQLServerVersion)-1) <> N'12'
+begin
+	set @errorMessage = (N'You are not running a SQL Server 2014. Your SQL Server version is ' + @SQLServerVersion);
+	Throw 51000, @errorMessage, 1;
+end
+
+if SERVERPROPERTY('EngineEdition') <> 3 
+begin
+	set @errorMessage = (N'Your SQL Server 2014 Edition is not an Enterprise or a Developer Edition: Your are running a ' + @SQLServerEdition);
+	Throw 51000, @errorMessage, 1;
+end
+
+--------------------------------------------------------------------------------------------------------------------
+if NOT EXISTS (select * from sys.objects where type = 'p' and name = 'memopt_SuggestedTables' and schema_id = SCHEMA_ID('dbo') )
+	exec ('create procedure dbo.memopt_SuggestedTables as select 1');
+GO
+
+/*
+	Memory Optimised Library for SQL Server 2014: 
+	Shows details for the Memory Optimised Tables within the database
+	Version: 0.2.0, November 2016
+*/
+alter procedure dbo.memopt_SuggestedTables(
+-- Params --
+	@minRowsToConsider bigint = 000000,							-- Minimum number of rows for a table to be considered for the suggestion inclusion
+	@minSizeToConsiderInGB Decimal(16,3) = 0.00,				-- Minimum size in GB for a table to be considered for the suggestion inclusion
+	@schemaName nvarchar(256) = NULL,							-- Allows to show data filtered down to the specified schema
+	@tableName nvarchar(256) = NULL,							-- Allows to show data filtered down to the specified table name pattern
+	@showReadyTablesOnly bit = 0,								-- Shows only those Rowstore tables that can already be converted to Memory-Optimised tables without any additional work
+	@showUnsupportedColumnsDetails bit = 0						-- Shows a list of all Unsupported from the listed tables
+-- end of --
+) as 
+begin
+	set nocount on;
+
+
+	declare 
+		@isEncrypted tinyint = 0;
+
+	-- Verify Snapshot Isolation Level or Read Commited Snapshot 
+	select
+		@isEncrypted = is_encrypted
+		from sys.databases
+		where database_id = DB_ID();
+
+	-- Returns tables suggested for using Memory-Optimised
+	if OBJECT_ID('tempdb..#TablesToInMemory') IS NOT NULL
+		drop table #TablesToInMemory;
+
+	create table #TablesToInMemory(
+		[ObjectId] int NOT NULL PRIMARY KEY,
+		[TableName] nvarchar(1000) NOT NULL,
+		[ShortTableName] nvarchar(256) NOT NULL,
+		[Compression] nvarchar(20) NOT NULL,
+		[Row Count] bigint NOT NULL,
+		[Size in GB] decimal(16,3) NOT NULL,
+		[Cols Count] smallint NOT NULL,
+		[String Cols] smallint NOT NULL,
+		[Sum Length] int NOT NULL,
+		[Unsupported] smallint NOT NULL,
+		[LOBs] smallint NOT NULL,
+		[Computed] smallint NOT NULL,
+		[GUIDs] smallint NOT NULL,
+		[Clustered Index] tinyint NOT NULL,
+		[Nonclustered Indexes] smallint NOT NULL,
+		[Columnstore] varchar(20) NULL,
+		[XML Indexes] smallint NOT NULL,
+		[Spatial Indexes] smallint NOT NULL,
+		[Primary Key] tinyint NOT NULL,
+		[Foreign Keys] smallint NOT NULL,
+		[Constraints] smallint NOT NULL,
+		[Triggers] smallint NOT NULL,
+		[TDE] tinyint NOT NULL,
+		[CDC] tinyint NOT NULL,
+		[CT] tinyint NOT NULL,
+		[Replication] tinyint NOT NULL,
+		[FileStream] tinyint NOT NULL,
+		[FileTable] tinyint NOT NULL
+	);
+
+	insert into #TablesToInMemory
+	select t.object_id as [ObjectId]
+		--, case ind.data_space_id when 0 then 'In-Memory' else 'Disk-Based' end 
+		, quotename(object_schema_name(t.object_id)) + '.' + quotename(object_name(t.object_id)) as 'TableName'
+		, replace(object_name(t.object_id),' ', '') as 'ShortTableName'
+		, max(p.data_compression_desc) as 'Compression'
+		, isnull(max(p.rows),0) as 'Row Count'
+		, cast( sum(a.total_pages) * 8.0 / 1024. / 1024 as decimal(16,3)) as 'size in GB'
+		, (select count(*) from sys.columns as col
+			where t.object_id = col.object_id ) as 'Cols Count'
+		, (select count(*) 
+				from sys.columns as col
+					inner join sys.types as tp
+						on col.user_type_id = tp.user_type_id
+				where t.object_id = col.object_id and 
+					 UPPER(tp.name) in ('VARCHAR','NVARCHAR','CHAR','NCHAR','SYSNAME') 
+		   ) as 'String Cols'
+		, (select sum(case col.max_length when -1 then 8000 else col.max_length end) 
+				from sys.columns as col
+					inner join sys.types as tp
+						on col.user_type_id = tp.user_type_id
+				where t.object_id = col.object_id 
+		  ) as 'Sum Length'
+		, (select count(*) 
+				from sys.columns as col
+					inner join sys.types as tp
+						on col.user_type_id = tp.user_type_id
+				where t.object_id = col.object_id AND 
+					 (
+						 (UPPER(tp.name) in ('IMAGE','TEXT','NTEXT','TIMESTAMP','HIERARCHYID','SQL_VARIANT','XML','GEOGRAPHY','GEOMETRY','DATETIMEOFFSET','UNIQUEIDENTIFIER') OR
+						  (UPPER(tp.name) in ('VARCHAR','NVARCHAR','CHAR','NCHAR','BINARY','VARBINARY') and (col.max_length = 8000 or col.max_length = -1)) 
+						 )
+						 OR (col.collation_name is not null AND col.collation_name not like '%_bin2')
+						 OR (COLLATIONPROPERTY(col.collation_name, 'CodePage') <> 1252)
+						 OR ( col.is_computed = 1 )
+					 )
+		   ) as 'Unsupported'
+		, (select count(*) 
+				from sys.columns as col
+					inner join sys.types as tp
+						on col.user_type_id = tp.user_type_id
+				where t.object_id = col.object_id and 
+					 (UPPER(tp.name) in ('VARCHAR','NVARCHAR','CHAR','NCHAR','VARBINARY','BINARY') and (col.max_length = 8000 or col.max_length = -1)) 
+		   ) as 'LOBs'
+		, (select count(*) 
+				from sys.columns as col
+				where t.object_id = col.object_id AND is_computed = 1 ) as 'Computed'
+		, (select count(*)
+			FROM sys.columns col
+			INNER JOIN sys.types as tp
+				ON col.user_type_id = tp.user_type_id
+			WHERE t.object_id = col.object_id
+				AND UPPER(tp.name) = 'UNIQUEIDENTIFIER') as 'Guid'
+		, (select count(*)
+				from sys.indexes ind
+				where type = 1 AND ind.object_id = t.object_id ) as 'Clustered Index'
+		, (select count(*)
+				from sys.indexes ind
+				where type = 2 AND ind.object_id = t.object_id ) as 'Nonclustered Indexes'
+		, (select max(case ind.type when 5 then 'CCI' when 6 then 'NCCI' end)
+				from sys.indexes ind
+				where type in (5,6) AND ind.object_id = t.object_id ) as 'Columnstore'
+		, (select count(*)
+				from sys.indexes ind
+				where type = 3 AND ind.object_id = t.object_id ) as 'XML Indexes'
+		, (select count(*)
+				from sys.indexes ind
+				where type = 4 AND ind.object_id = t.object_id ) as 'Spatial Indexes'
+		, (select count(*)
+				from sys.objects
+				where UPPER(type) = 'PK' AND parent_object_id = t.object_id ) as 'Primary Key'
+		, (select count(*)
+				from sys.objects
+				where UPPER(type) = 'F' AND parent_object_id = t.object_id ) as 'Foreign Keys'
+		, (select count(*)
+				from sys.objects
+				where UPPER(type) in ('UQ','C') AND parent_object_id = t.object_id ) as 'Constraints'
+		, (select count(*)
+				from sys.objects
+				where UPPER(type) in ('TA','TR') AND parent_object_id = t.object_id ) as 'Triggers'
+		, @isEncrypted as 'TDE'
+		, t.is_tracked_by_cdc as 'CDC'
+		, (select count(*) 
+				from sys.change_tracking_tables ctt with(READUNCOMMITTED)
+				where ctt.object_id = t.object_id and ctt.is_track_columns_updated_on = 1 
+					  and DB_ID() in (select database_id from sys.change_tracking_databases ctdb)) as 'CT'
+		, t.is_replicated as 'Replication'
+		, coalesce(t.filestream_data_space_id,0,1) as 'FileStream'
+		, t.is_filetable as 'FileTable'
+		from sys.tables t
+			inner join sys.partitions as p 
+				ON t.object_id = p.object_id
+			inner join sys.allocation_units as a 
+				ON p.partition_id = a.container_id
+			inner join sys.indexes ind
+				on ind.object_id = p.object_id and ind.index_id = p.index_id
+			left join sys.dm_db_xtp_table_memory_stats xtpMem
+				on xtpMem.object_id = t.object_id
+		where --p.data_compression in (0,1,2) -- None, Row, Page
+			 --and 
+				t.is_memory_optimized = 0 -- Do not include In-Memory Tables
+			 and (@tableName is null or object_name (t.object_id) like '%' + @tableName + '%')
+			 and (@schemaName is null or object_schema_name( t.object_id ) = @schemaName)
+		 
+			 and (( @showReadyTablesOnly = 1 
+					and  		
+					(select count(*) 
+								from sys.columns as col
+									inner join sys.types as tp
+										on col.user_type_id = tp.user_type_id
+								where t.object_id = col.object_id AND 
+									 (
+										 (UPPER(tp.name) in ('IMAGE','TEXT','NTEXT','TIMESTAMP','HIERARCHYID','SQL_VARIANT','XML','GEOGRAPHY','GEOMETRY','DATETIMEOFFSET','UNIQUEIDENTIFIER') OR
+										  (UPPER(tp.name) in ('VARCHAR','NVARCHAR','CHAR','NCHAR','BINARY','VARBINARY') and (col.max_length = 8000 or col.max_length = -1)) 
+										 )
+										 OR (col.collation_name is not null AND col.collation_name not like '%_bin2')
+										 OR (COLLATIONPROPERTY(col.collation_name, 'CodePage') <> 1252)
+										 OR ( col.is_computed = 1 )
+				 						) ) = 0 
+					and (select count(*)
+							from sys.objects so
+							where UPPER(so.type) in ('PK','F','UQ','TA','TR') and parent_object_id = t.object_id ) = 0
+					and (select count(*)
+							from sys.indexes ind
+							where t.object_id = ind.object_id
+								and ind.type in (3,4) ) = 0
+					and (select count(*) 
+							from sys.change_tracking_tables ctt with(READUNCOMMITTED)
+							where ctt.object_id = t.object_id and ctt.is_track_columns_updated_on = 1 
+									and DB_ID() in (select database_id from sys.change_tracking_databases ctdb)) = 0
+					and t.is_tracked_by_cdc = 0
+					and t.is_memory_optimized = 0
+					and t.is_replicated = 0
+					and coalesce(t.filestream_data_space_id,0,1) = 0
+					and t.is_filetable = 0
+				  )
+				 or @showReadyTablesOnly = 0)
+		group by t.object_id, ind.data_space_id, t.is_tracked_by_cdc, t.is_memory_optimized, t.is_filetable, t.is_replicated, t.filestream_data_space_id
+		having 
+				(sum(p.rows) >= @minRowsToConsider or (sum(p.rows) = 0 and is_memory_optimized = 1) )
+				and
+				((select sum(col.max_length) 
+					from sys.columns as col
+						inner join sys.types as tp
+							on col.system_type_id = tp.system_type_id
+					where t.object_id = col.object_id 
+				  ) < 8000 )
+				and 
+				(sum(a.total_pages) + isnull(sum(memory_allocated_for_table_kb),0) / 1024. / 1024 * 8.0 / 1024. / 1024 >= @minSizeToConsiderInGB)
+	union all
+	select t.object_id as [ObjectId]
+		, quotename(object_schema_name(t.object_id)) + '.' + quotename(object_name(t.object_id, db_id('tempdb'))) as 'TableName'
+		, replace(object_name(t.object_id, db_id('tempdb')),' ', '') as 'ShortTableName'
+		, max(p.data_compression_desc) as 'Compression'
+		, max(p.rows) as 'Row Count'
+		, cast( sum(a.total_pages) * 8.0 / 1024. / 1024 as decimal(16,3)) as 'size in GB'
+		, (select count(*) from tempdb.sys.columns as col
+			where t.object_id = col.object_id ) as 'Cols Count'
+		, (select count(*) 
+				from tempdb.sys.columns as col
+					inner join tempdb.sys.types as tp
+						on col.user_type_id = tp.user_type_id
+				where t.object_id = col.object_id and 
+					 UPPER(tp.name) in ('VARCHAR','NVARCHAR','CHAR','NCHAR','SYSNAME') 
+		   ) as 'String Cols'
+		, (select sum(col.max_length) 
+				from tempdb.sys.columns as col
+					inner join tempdb.sys.types as tp
+						on col.user_type_id = tp.user_type_id
+				where t.object_id = col.object_id 
+		  ) as 'Sum Length'
+		, (select count(*) 
+				from tempdb.sys.columns as col
+					inner join tempdb.sys.types as tp
+						on col.user_type_id = tp.user_type_id
+				where t.object_id = col.object_id AND 
+					 (
+						 (UPPER(tp.name) in ('IMAGE','TEXT','NTEXT','TIMESTAMP','HIERARCHYID','SQL_VARIANT','XML','GEOGRAPHY','GEOMETRY','DATETIMEOFFSET','UNIQUEIDENTIFIER') OR
+						  (UPPER(tp.name) in ('VARCHAR','NVARCHAR','CHAR','NCHAR','BINARY','VARBINARY') and (col.max_length = 8000 or col.max_length = -1)) 
+						 )
+						 OR (col.collation_name is not null AND col.collation_name not like '%_bin2')
+						 OR (COLLATIONPROPERTY(col.collation_name, 'CodePage') <> 1252)
+						 OR ( col.is_computed = 1 )
+					 )
+		   ) as 'Unsupported'
+		, (select count(*) 
+				from tempdb.sys.columns as col
+					inner join tempdb.sys.types as tp
+						on col.user_type_id = tp.user_type_id
+				where t.object_id = col.object_id and 
+					 (UPPER(tp.name) in ('VARCHAR','NVARCHAR','CHAR','NCHAR') and (col.max_length = 8000 or col.max_length = -1)) 
+		   ) as 'LOBs'
+		, (select count(*) 
+				from tempdb.sys.columns as col
+				where is_computed = 1 ) as 'Computed'
+		, (select count(*)
+			FROM sys.columns col
+			INNER JOIN sys.types as tp
+				ON col.user_type_id = tp.user_type_id
+			WHERE t.object_id = col.object_id
+				AND UPPER(tp.name) = 'UNIQUEIDENTIFIER') as 'Guid'
+		, (select count(*)
+				from tempdb.sys.indexes ind
+				where type = 1 AND ind.object_id = t.object_id ) as 'Clustered Index'
+		, (select count(*)
+				from tempdb.sys.indexes ind
+				where type = 2 AND ind.object_id = t.object_id ) as 'Nonclustered Indexes'
+		, (select max(case ind.type when 5 then 'CCI' when 6 then 'NCCI' end)
+				from sys.indexes ind
+				where type in (5,6) AND ind.object_id = t.object_id ) as 'Columnstore'
+		, (select count(*)
+				from tempdb.sys.indexes ind
+				where type = 3 AND ind.object_id = t.object_id ) as 'XML Indexes'
+		, (select count(*)
+				from tempdb.sys.indexes ind
+				where type = 4 AND ind.object_id = t.object_id ) as 'Spatial Indexes'
+		, (select count(*)
+				from tempdb.sys.objects
+				where UPPER(type) = 'PK' AND parent_object_id = t.object_id ) as 'Primary Key'
+		, (select count(*)
+				from tempdb.sys.objects
+				where UPPER(type) = 'F' AND parent_object_id = t.object_id ) as 'Foreign Keys'
+		, (select count(*)
+				from tempdb.sys.objects
+				where UPPER(type) in ('UQ','C') AND parent_object_id = t.object_id ) as 'Constraints'
+		, (select count(*)
+				from tempdb.sys.objects
+				where UPPER(type) in ('TA','TR') AND parent_object_id = t.object_id ) as 'Triggers'
+		, @isEncrypted as 'TDE'
+		, t.is_tracked_by_cdc as 'CDC'
+		, (select count(*) 
+				from tempdb.sys.change_tracking_tables ctt with(READUNCOMMITTED)
+				where ctt.object_id = t.object_id and ctt.is_track_columns_updated_on = 1 
+					  and DB_ID() in (select database_id from sys.change_tracking_databases ctdb)) as 'CT'
+		, t.is_replicated as 'Replication'
+		, coalesce(t.filestream_data_space_id,0,1) as 'FileStream'
+		, t.is_filetable as 'FileTable'
+		from tempdb.sys.tables t
+			inner join tempdb.sys.partitions as p 
+				ON t.object_id = p.object_id
+			inner join tempdb.sys.allocation_units as a 
+				ON p.partition_id = a.container_id
+		where p.data_compression in (0,1,2) -- None, Row, Page
+			 and (@tableName is null or object_name( t.object_id, db_id('tempdb') ) like '%' + @tableName + '%')
+			 and (@schemaName is null or object_schema_name( t.object_id, db_id('tempdb') ) = @schemaName)
+			 and t.is_memory_optimized = 0
+			 and (( @showReadyTablesOnly = 1 
+					and  
+					(select count(*) 
+								from sys.columns as col
+									inner join sys.types as tp
+										on col.user_type_id = tp.user_type_id
+								where t.object_id = col.object_id AND 
+									 (
+										 (UPPER(tp.name) in ('IMAGE','TEXT','NTEXT','TIMESTAMP','HIERARCHYID','SQL_VARIANT','XML','GEOGRAPHY','GEOMETRY','DATETIMEOFFSET','UNIQUEIDENTIFIER') OR
+										  (UPPER(tp.name) in ('VARCHAR','NVARCHAR','CHAR','NCHAR','BINARY','VARBINARY') and (col.max_length = 8000 or col.max_length = -1)) 
+										 )
+										 OR (col.collation_name is not null AND col.collation_name not like '%_bin2')
+										 OR (COLLATIONPROPERTY(col.collation_name, 'CodePage') <> 1252)
+										 OR ( col.is_computed = 1 )
+				 						) ) = 0 
+					and (select count(*)
+							from tempdb.sys.objects so
+							where UPPER(so.type) in ('PK','F','UQ','TA','TR') and parent_object_id = t.object_id ) = 0
+					and (select count(*)
+							from tempdb.sys.indexes ind
+							where t.object_id = ind.object_id
+								and ind.type in (3,4) ) = 0
+					and (select count(*) 
+							from tempdb.sys.change_tracking_tables ctt with(READUNCOMMITTED)
+							where ctt.object_id = t.object_id and ctt.is_track_columns_updated_on = 1 
+									and DB_ID() in (select database_id from sys.change_tracking_databases ctdb)) = 0
+					and t.is_tracked_by_cdc = 0
+					and t.is_memory_optimized = 0
+					and t.is_replicated = 0
+					and coalesce(t.filestream_data_space_id,0,1) = 0
+					and t.is_filetable = 0
+				  )
+				 or @showReadyTablesOnly = 0)
+		group by t.object_id, t.is_tracked_by_cdc, t.is_memory_optimized, t.is_filetable, t.is_replicated, t.filestream_data_space_id
+		having sum(p.rows) >= @minRowsToConsider 
+				and
+				(((select sum(col.max_length) 
+					from tempdb.sys.columns as col
+						inner join tempdb.sys.types as tp
+							on col.system_type_id = tp.system_type_id
+					where t.object_id = col.object_id 
+				  ) < 8000 ) )
+				and 
+				(sum(a.total_pages) * 8.0 / 1024. / 1024 >= @minSizeToConsiderInGB)
+
+	delete from #TablesToInMemory
+		where [Size in GB] < @minSizeToConsiderInGB
+			or [Row Count] < @minRowsToConsider;
+
+	-- Show the found results
+	select [TableName], [Compression], [Row Count], [Size in GB], [Cols Count], [Sum Length], [Unsupported], [LOBs], [Computed], [GUIDs]
+		, [Clustered Index] as CI, [Nonclustered Indexes] as NCI
+		, isnull([Columnstore],'none') as [Columnstore]
+		, [XML Indexes], [Spatial Indexes], [Primary Key], [Foreign Keys], [Constraints]
+		, [Triggers], [TDE], [CDC], [CT], [Replication], [FileStream], [FileTable]
+		from #TablesToInMemory
+		order by [Size in GB] desc;
+
+	if( @showUnsupportedColumnsDetails = 1 ) 
+	begin
+		select quotename(object_schema_name(t.object_id)) + '.' + quotename(object_name (t.object_id)) as 'TableName',
+			col.name as 'Unsupported Column Name',
+			tp.name as 'Data Type',
+			col.collation_name as 'Collation',
+			col.max_length as 'Max Length',
+			col.precision as 'Precision',
+			col.is_computed as 'Computed'
+			from sys.tables t
+				inner join sys.columns as col
+					on t.object_id = col.object_id 
+				inner join sys.types as tp
+					on col.user_type_id = tp.user_type_id 
+				where  ((UPPER(tp.name) in ('IMAGE','TEXT','NTEXT','TIMESTAMP','HIERARCHYID','SQL_VARIANT','XML','GEOGRAPHY','GEOMETRY','DATETIMEOFFSET','UNIQUEIDENTIFIER') OR
+						(UPPER(tp.name) in ('VARCHAR','NVARCHAR','CHAR','NCHAR') and (col.max_length = 8000 or col.max_length = -1)) 
+						) 
+						OR col.is_computed = 1 
+						OR (col.collation_name is not null AND col.collation_name not like '%_bin2')
+						OR (COLLATIONPROPERTY(col.collation_name, 'CodePage') <> 1252)
+					  )
+				 and t.object_id in (select ObjectId from #TablesToInMemory);
+	end
+
+	drop table #TablesToInMemory; 
+
+END 
+
+GO
