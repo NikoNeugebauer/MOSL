@@ -244,7 +244,7 @@ select t.object_id as [ObjectId]
 			(sum(a.total_pages) + isnull(sum(memory_allocated_for_table_kb),0) / 1024. / 1024 * 8.0 / 1024. / 1024 >= @minSizeToConsiderInGB)
 union all
 select t.object_id as [ObjectId]
-	, quotename(object_schema_name(t.object_id)) + '.' + quotename(object_name(t.object_id, db_id('tempdb'))) as 'TableName'
+	, quotename(object_schema_name(t.object_id, db_id('tempdb'))) + '.' + quotename(object_name(t.object_id, db_id('tempdb'))) as 'TableName'
 	, replace(object_name(t.object_id, db_id('tempdb')),' ', '') as 'ShortTableName'
 	, max(p.data_compression_desc) as 'Compression'
 	, max(p.rows) as 'Row Count'
