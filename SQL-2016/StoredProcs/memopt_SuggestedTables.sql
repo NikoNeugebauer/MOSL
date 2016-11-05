@@ -1,5 +1,5 @@
 /*
-	Memory Optimised Library for SQL Server 2014: 
+	Memory Optimised Library for SQL Server 2016: 
 	Suggested Tables - Shows details for the suggessted Memory Optimised Tables within the database
 	Version: 0.2.0, November 2016
 
@@ -22,16 +22,16 @@ declare @SQLServerVersion nvarchar(128) = cast(SERVERPROPERTY('ProductVersion') 
 		@SQLServerEdition nvarchar(128) = cast(SERVERPROPERTY('Edition') as NVARCHAR(128));
 declare @errorMessage nvarchar(512);
 
- --Ensure that we are running SQL Server 2014
-if substring(@SQLServerVersion,1,CHARINDEX('.',@SQLServerVersion)-1) <> N'12'
+ --Ensure that we are running SQL Server 2016
+if substring(@SQLServerVersion,1,CHARINDEX('.',@SQLServerVersion)-1) <> N'13'
 begin
-	set @errorMessage = (N'You are not running a SQL Server 2014. Your SQL Server version is ' + @SQLServerVersion);
+	set @errorMessage = (N'You are not running a SQL Server 2016. Your SQL Server version is ' + @SQLServerVersion);
 	Throw 51000, @errorMessage, 1;
 end
 
 if SERVERPROPERTY('EngineEdition') <> 3 
 begin
-	set @errorMessage = (N'Your SQL Server 2014 Edition is not an Enterprise or a Developer Edition: Your are running a ' + @SQLServerEdition);
+	set @errorMessage = (N'Your SQL Server 2016 Edition is not an Enterprise or a Developer Edition: Your are running a ' + @SQLServerEdition);
 	Throw 51000, @errorMessage, 1;
 end
 
@@ -41,7 +41,7 @@ if NOT EXISTS (select * from sys.objects where type = 'p' and name = 'memopt_Sug
 GO
 
 /*
-	Memory Optimised Library for SQL Server 2014: 
+	Memory Optimised Library for SQL Server 2016: 
 	Shows details for the Memory Optimised Tables within the database
 	Version: 0.2.0, November 2016
 */
@@ -58,19 +58,8 @@ alter procedure dbo.memopt_SuggestedTables(
 begin
 	set nocount on;
 
-
-	declare 
-		@isEncrypted tinyint = 0;
-
-	-- Check if the database is encrypted with TDE
-	select
-		@isEncrypted = is_encrypted
-		from sys.databases
-		where database_id = DB_ID();
-
 	-- Returns tables suggested for using Memory-Optimised
-	if OBJECT_ID('tempdb..#TablesToInMemory') IS NOT NULL
-		drop table #TablesToInMemory;
+	DROP TABLE IF EXISTS #TablesToInMemory;
 
 	create table #TablesToInMemory(
 		[ObjectId] int NOT NULL PRIMARY KEY,
@@ -95,7 +84,6 @@ begin
 		[Foreign Keys] smallint NOT NULL,
 		[Constraints] smallint NOT NULL,
 		[Triggers] smallint NOT NULL,
-		[TDE] tinyint NOT NULL,
 		[CDC] tinyint NOT NULL,
 		[CT] tinyint NOT NULL,
 		[Replication] tinyint NOT NULL,
@@ -135,8 +123,6 @@ begin
 						 (UPPER(tp.name) in ('IMAGE','TEXT','NTEXT','TIMESTAMP','HIERARCHYID','SQL_VARIANT','XML','GEOGRAPHY','GEOMETRY','DATETIMEOFFSET','UNIQUEIDENTIFIER') OR
 						  (UPPER(tp.name) in ('VARCHAR','NVARCHAR','CHAR','NCHAR','BINARY','VARBINARY') and (col.max_length = 8000 or col.max_length = -1)) 
 						 )
-						 OR (col.collation_name is not null AND col.collation_name not like '%_bin2')
-						 OR (COLLATIONPROPERTY(col.collation_name, 'CodePage') <> 1252)
 						 OR ( col.is_computed = 1 )
 					 )
 		   ) as 'Unsupported'
@@ -183,7 +169,6 @@ begin
 		, (select count(*)
 				from sys.objects
 				where UPPER(type) in ('TA','TR') AND parent_object_id = t.object_id ) as 'Triggers'
-		, @isEncrypted as 'TDE'
 		, t.is_tracked_by_cdc as 'CDC'
 		, (select count(*) 
 				from sys.change_tracking_tables ctt with(READUNCOMMITTED)
@@ -218,17 +203,15 @@ begin
 										 (UPPER(tp.name) in ('IMAGE','TEXT','NTEXT','TIMESTAMP','HIERARCHYID','SQL_VARIANT','XML','GEOGRAPHY','GEOMETRY','DATETIMEOFFSET','UNIQUEIDENTIFIER') OR
 										  (UPPER(tp.name) in ('VARCHAR','NVARCHAR','CHAR','NCHAR','BINARY','VARBINARY') and (col.max_length = 8000 or col.max_length = -1)) 
 										 )
-										 OR (col.collation_name is not null AND col.collation_name not like '%_bin2')
-										 OR (COLLATIONPROPERTY(col.collation_name, 'CodePage') <> 1252)
 										 OR ( col.is_computed = 1 )
 				 						) ) = 0 
 					and (select count(*)
-							from tempdb.sys.objects so
-								where UPPER(so.type) in ('PK','F','UQ','C','TA','TR') and parent_object_id = t.object_id ) = 0
+							from sys.objects so
+							where UPPER(so.type) in ('PK','F','UQ','TA','TR') and parent_object_id = t.object_id ) = 0
 					and (select count(*)
-							from tempdb.sys.indexes ind
+							from sys.indexes ind
 							where t.object_id = ind.object_id
-								and ind.type in (3,4,5,6) ) = 0			/* XML, Spatial, Columnstore CCI & NCCI */
+								and ind.type in (3,4) ) = 0
 					and (select count(*) 
 							from sys.change_tracking_tables ctt with(READUNCOMMITTED)
 							where ctt.object_id = t.object_id and ctt.is_track_columns_updated_on = 1 
@@ -238,7 +221,6 @@ begin
 					and t.is_replicated = 0
 					and coalesce(t.filestream_data_space_id,0,1) = 0
 					and t.is_filetable = 0
-					and @isEncrypted = 0
 				  )
 				 or @showReadyTablesOnly = 0)
 		group by t.object_id, ind.data_space_id, t.is_tracked_by_cdc, t.is_memory_optimized, t.is_filetable, t.is_replicated, t.filestream_data_space_id
@@ -284,8 +266,6 @@ begin
 						 (UPPER(tp.name) in ('IMAGE','TEXT','NTEXT','TIMESTAMP','HIERARCHYID','SQL_VARIANT','XML','GEOGRAPHY','GEOMETRY','DATETIMEOFFSET','UNIQUEIDENTIFIER') OR
 						  (UPPER(tp.name) in ('VARCHAR','NVARCHAR','CHAR','NCHAR','BINARY','VARBINARY') and (col.max_length = 8000 or col.max_length = -1)) 
 						 )
-						 OR (col.collation_name is not null AND col.collation_name not like '%_bin2')
-						 OR (COLLATIONPROPERTY(col.collation_name, 'CodePage') <> 1252)
 						 OR ( col.is_computed = 1 )
 					 )
 		   ) as 'Unsupported'
@@ -332,7 +312,6 @@ begin
 		, (select count(*)
 				from tempdb.sys.objects
 				where UPPER(type) in ('TA','TR') AND parent_object_id = t.object_id ) as 'Triggers'
-		, @isEncrypted as 'TDE'
 		, t.is_tracked_by_cdc as 'CDC'
 		, (select count(*) 
 				from tempdb.sys.change_tracking_tables ctt with(READUNCOMMITTED)
@@ -358,20 +337,17 @@ begin
 										on col.user_type_id = tp.user_type_id
 								where t.object_id = col.object_id AND 
 									 (
-										 (UPPER(tp.name) in ('IMAGE','TEXT','NTEXT','TIMESTAMP','HIERARCHYID','SQL_VARIANT','XML','GEOGRAPHY','GEOMETRY','DATETIMEOFFSET','UNIQUEIDENTIFIER') OR
-										  (UPPER(tp.name) in ('VARCHAR','NVARCHAR','CHAR','NCHAR','BINARY','VARBINARY') and (col.max_length = 8000 or col.max_length = -1)) 
+										 (UPPER(tp.name) in ('IMAGE','TEXT','NTEXT','TIMESTAMP','HIERARCHYID','SQL_VARIANT','XML','GEOGRAPHY','GEOMETRY','DATETIMEOFFSET','UNIQUEIDENTIFIER') 
 										 )
-										 OR (col.collation_name is not null AND col.collation_name not like '%_bin2')
-										 OR (COLLATIONPROPERTY(col.collation_name, 'CodePage') <> 1252)
 										 OR ( col.is_computed = 1 )
 				 						) ) = 0 
 					and (select count(*)
 							from tempdb.sys.objects so
-								where UPPER(so.type) in ('PK','F','UQ','C','TA','TR') and parent_object_id = t.object_id ) = 0
+							where UPPER(so.type) in ('PK','F','UQ','TA','TR') and parent_object_id = t.object_id ) = 0
 					and (select count(*)
 							from tempdb.sys.indexes ind
 							where t.object_id = ind.object_id
-								and ind.type in (3,4,5,6) ) = 0			/* XML, Spatial, Columnstore CCI & NCCI */
+								and ind.type in (3,4) ) = 0
 					and (select count(*) 
 							from tempdb.sys.change_tracking_tables ctt with(READUNCOMMITTED)
 							where ctt.object_id = t.object_id and ctt.is_track_columns_updated_on = 1 
@@ -404,7 +380,7 @@ begin
 		, [Clustered Index] as CI, [Nonclustered Indexes] as NCI
 		, isnull([Columnstore],'none') as [Columnstore]
 		, [XML Indexes], [Spatial Indexes], [Primary Key], [Foreign Keys], [Constraints]
-		, [Triggers], [TDE], [CDC], [CT], [Replication], [FileStream], [FileTable]
+		, [Triggers], [CDC], [CT], [Replication], [FileStream], [FileTable]
 		from #TablesToInMemory
 		order by [Size in GB] desc;
 
@@ -426,11 +402,85 @@ begin
 						(UPPER(tp.name) in ('VARCHAR','NVARCHAR','CHAR','NCHAR') and (col.max_length = 8000 or col.max_length = -1)) 
 						) 
 						OR col.is_computed = 1 
-						OR (col.collation_name is not null AND col.collation_name not like '%_bin2')
-						OR (COLLATIONPROPERTY(col.collation_name, 'CodePage') <> 1252)
 					  )
 				 and t.object_id in (select ObjectId from #TablesToInMemory);
 	end
+
+	--if( @showTSQLCommandsBeta = 1 ) 
+	--begin
+		--select coms.TableName, coms.[TSQL Command], coms.[type] 
+		--	from (
+		--		select t.TableName, 
+		--				'create ' + @columnstoreIndexTypeForTSQL + ' columnstore index ' + 
+		--				case @columnstoreIndexTypeForTSQL when 'Clustered' then 'CCI' when 'Nonclustered' then 'NCCI' end 
+		--				+ '_' + t.[ShortTableName] + 
+		--				' on ' + t.TableName + case @columnstoreIndexTypeForTSQL when 'Nonclustered' then '()' else '' end + ';' as [TSQL Command]
+		--			   , 'CCL' as type,
+		--			   101 as [Sort Order]
+		--			from #TablesToInMemory t
+		--		union all
+		--		select t.TableName, 'alter table ' + t.TableName + ' drop constraint ' + (quotename(so.name) collate SQL_Latin1_General_CP1_CI_AS) + ';' as [TSQL Command], [type], 
+		--			   case UPPER(type) when 'PK' then 100 when 'F' then 1 when 'UQ' then 100 end as [Sort Order]
+		--			from #TablesToInMemory t
+		--			inner join sys.objects so
+		--				on t.ObjectId = so.parent_object_id or t.ObjectId = so.object_id
+		--			where UPPER(type) in ('PK','F','UQ')
+		--		union all
+		--		select t.TableName, 'drop trigger ' + (quotename(so.name) collate SQL_Latin1_General_CP1_CI_AS) + ';' as [TSQL Command], type,
+		--			50 as [Sort Order]
+		--			from #TablesToInMemory t
+		--			inner join sys.objects so
+		--				on t.ObjectId = so.parent_object_id
+		--			where UPPER(type) in ('TR')
+		--		union all
+		--		select t.TableName, 'drop assembly ' + (quotename(so.name) collate SQL_Latin1_General_CP1_CI_AS) + ' WITH NO DEPENDENTS ;' as [TSQL Command], type,
+		--			50 as [Sort Order]
+		--			from #TablesToInMemory t
+		--			inner join sys.objects so
+		--				on t.ObjectId = so.parent_object_id
+		--			where UPPER(type) in ('TA')	
+		--		union all 
+		--		select t.TableName, 'drop index ' + (quotename(ind.name) collate SQL_Latin1_General_CP1_CI_AS) + ' on ' + t.TableName + ';' as [TSQL Command], 'CL' as type,
+		--			10 as [Sort Order]
+		--			from #TablesToInMemory t
+		--			inner join sys.indexes ind
+		--				on t.ObjectId = ind.object_id
+		--			where type = 1 and not exists
+		--				(select 1 from #TablesToInMemory t1
+		--					inner join sys.objects so1
+		--						on t1.ObjectId = so1.parent_object_id
+		--					where UPPER(so1.type) in ('PK','F','UQ')
+		--						and quotename(ind.name) <> quotename(so1.name))
+		--		union all 
+		--		select t.TableName, 'drop index ' + (quotename(ind.name) collate SQL_Latin1_General_CP1_CI_AS) + ' on ' + t.TableName + ';' as [TSQL Command], 'NC' as type,
+		--			10 as [Sort Order]
+		--			from #TablesToInMemory t
+		--			inner join sys.indexes ind
+		--				on t.ObjectId = ind.object_id
+		--			where type = 2 and not exists
+		--				(select * from #TablesToInMemory t1
+		--					inner join sys.objects so1
+		--						on t1.ObjectId = so1.parent_object_id 
+		--					where UPPER(so1.type) in ('PK','F','UQ')
+		--						and quotename(ind.name) <> quotename(so1.name) and t.ObjectId = t1.ObjectId )
+		--		union all 
+		--		select t.TableName, 'drop index ' + (quotename(ind.name) collate SQL_Latin1_General_CP1_CI_AS) + ' on ' + t.TableName + ';' as [TSQL Command], 'XML' as type,
+		--			10 as [Sort Order]
+		--			from #TablesToInMemory t
+		--			inner join sys.indexes ind
+		--				on t.ObjectId = ind.object_id
+		--			where type = 3
+		--		union all 
+		--		select t.TableName, 'drop index ' + (quotename(ind.name) collate SQL_Latin1_General_CP1_CI_AS) + ' on ' + t.TableName + ';' as [TSQL Command], 'SPAT' as type,
+		--			10 as [Sort Order]
+		--			from #TablesToInMemory t
+		--			inner join sys.indexes ind
+		--				on t.ObjectId = ind.object_id
+		--			where type = 4
+		--	) coms
+		--order by coms.type desc, coms.[Sort Order]; --coms.TableName 
+	
+	--end
 
 	drop table #TablesToInMemory; 
 

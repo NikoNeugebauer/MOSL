@@ -1,5 +1,5 @@
 /*
-	Memory Optimised Library for SQL Server 2014: 
+	Memory Optimised Library for SQL Server 2016: 
 	Suggested Tables - Shows details for the suggessted Memory Optimised Tables within the database
 	Version: 0.2.0, November 2016
 
@@ -31,16 +31,16 @@ declare @SQLServerVersion nvarchar(128) = cast(SERVERPROPERTY('ProductVersion') 
 		@SQLServerEdition nvarchar(128) = cast(SERVERPROPERTY('Edition') as NVARCHAR(128));
 declare @errorMessage nvarchar(512);
 
--- Ensure that we are running SQL Server 2014
-if substring(@SQLServerVersion,1,CHARINDEX('.',@SQLServerVersion)-1) <> N'12'
+-- Ensure that we are running SQL Server 2016
+if substring(@SQLServerVersion,1,CHARINDEX('.',@SQLServerVersion)-1) <> N'13'
 begin
-	set @errorMessage = (N'You are not running a SQL Server 2014. Your SQL Server version is ' + @SQLServerVersion);
+	set @errorMessage = (N'You are not running a SQL Server 2016. Your SQL Server version is ' + @SQLServerVersion);
 	Throw 51000, @errorMessage, 1;
 end
 
 if SERVERPROPERTY('EngineEdition') <> 3 
 begin
-	set @errorMessage = (N'Your SQL Server 2014 Edition is not an Enterprise or a Developer Edition: Your are running a ' + @SQLServerEdition);
+	set @errorMessage = (N'Your SQL Server 2016 Edition is not an Enterprise or a Developer Edition: Your are running a ' + @SQLServerEdition);
 	Throw 51000, @errorMessage, 1;
 end
 
@@ -49,18 +49,8 @@ end
 --------------------------------------------------------------------------------------------------------------------
 set nocount on;
 
-declare 
-	@isEncrypted tinyint = 0;
-
--- Check if the database is encrypted with TDE
-select
-	@isEncrypted = is_encrypted
-	from sys.databases
-	where database_id = DB_ID();
-
 -- Returns tables suggested for using Memory-Optimised
-if OBJECT_ID('tempdb..#TablesToInMemory') IS NOT NULL
-	drop table #TablesToInMemory;
+DROP TABLE IF EXISTS #TablesToInMemory;
 
 create table #TablesToInMemory(
 	[ObjectId] int NOT NULL PRIMARY KEY,
@@ -85,7 +75,6 @@ create table #TablesToInMemory(
 	[Foreign Keys] smallint NOT NULL,
 	[Constraints] smallint NOT NULL,
 	[Triggers] smallint NOT NULL,
-	[TDE] tinyint NOT NULL,
 	[CDC] tinyint NOT NULL,
 	[CT] tinyint NOT NULL,
 	[Replication] tinyint NOT NULL,
@@ -125,8 +114,6 @@ select t.object_id as [ObjectId]
 					 (UPPER(tp.name) in ('IMAGE','TEXT','NTEXT','TIMESTAMP','HIERARCHYID','SQL_VARIANT','XML','GEOGRAPHY','GEOMETRY','DATETIMEOFFSET','UNIQUEIDENTIFIER') OR
 					  (UPPER(tp.name) in ('VARCHAR','NVARCHAR','CHAR','NCHAR','BINARY','VARBINARY') and (col.max_length = 8000 or col.max_length = -1)) 
 					 )
-					 OR (col.collation_name is not null AND col.collation_name not like '%_bin2')
-					 OR (COLLATIONPROPERTY(col.collation_name, 'CodePage') <> 1252)
 					 OR ( col.is_computed = 1 )
 				 )
 	   ) as 'Unsupported'
@@ -173,7 +160,6 @@ select t.object_id as [ObjectId]
 	, (select count(*)
 			from sys.objects
 			where UPPER(type) in ('TA','TR') AND parent_object_id = t.object_id ) as 'Triggers'
-    , @isEncrypted as 'TDE'
 	, t.is_tracked_by_cdc as 'CDC'
 	, (select count(*) 
 			from sys.change_tracking_tables ctt with(READUNCOMMITTED)
@@ -208,17 +194,15 @@ select t.object_id as [ObjectId]
 									 (UPPER(tp.name) in ('IMAGE','TEXT','NTEXT','TIMESTAMP','HIERARCHYID','SQL_VARIANT','XML','GEOGRAPHY','GEOMETRY','DATETIMEOFFSET','UNIQUEIDENTIFIER') OR
 									  (UPPER(tp.name) in ('VARCHAR','NVARCHAR','CHAR','NCHAR','BINARY','VARBINARY') and (col.max_length = 8000 or col.max_length = -1)) 
 									 )
-									 OR (col.collation_name is not null AND col.collation_name not like '%_bin2')
-									 OR (COLLATIONPROPERTY(col.collation_name, 'CodePage') <> 1252)
 									 OR ( col.is_computed = 1 )
 				 					) ) = 0 
 				and (select count(*)
 						from sys.objects so
-						where UPPER(so.type) in ('PK','F','UQ','C','TA','TR') and parent_object_id = t.object_id ) = 0
+						where UPPER(so.type) in ('PK','F','UQ','TA','TR') and parent_object_id = t.object_id ) = 0
 				and (select count(*)
 						from sys.indexes ind
 						where t.object_id = ind.object_id
-							and ind.type in (3,4,5,6) ) = 0 /* XML, Spatial, Columnstore CCI & NCCI */
+							and ind.type in (3,4) ) = 0
 				and (select count(*) 
 						from sys.change_tracking_tables ctt with(READUNCOMMITTED)
 						where ctt.object_id = t.object_id and ctt.is_track_columns_updated_on = 1 
@@ -228,7 +212,6 @@ select t.object_id as [ObjectId]
 				and t.is_replicated = 0
 				and coalesce(t.filestream_data_space_id,0,1) = 0
 				and t.is_filetable = 0
-				and @isEncrypted = 0
 			  )
 			 or @showReadyTablesOnly = 0)
 	group by t.object_id, ind.data_space_id, t.is_tracked_by_cdc, t.is_memory_optimized, t.is_filetable, t.is_replicated, t.filestream_data_space_id
@@ -274,8 +257,6 @@ select t.object_id as [ObjectId]
 					 (UPPER(tp.name) in ('IMAGE','TEXT','NTEXT','TIMESTAMP','HIERARCHYID','SQL_VARIANT','XML','GEOGRAPHY','GEOMETRY','DATETIMEOFFSET','UNIQUEIDENTIFIER') OR
 					  (UPPER(tp.name) in ('VARCHAR','NVARCHAR','CHAR','NCHAR','BINARY','VARBINARY') and (col.max_length = 8000 or col.max_length = -1)) 
 					 )
-					 OR (col.collation_name is not null AND col.collation_name not like '%_bin2')
-					 OR (COLLATIONPROPERTY(col.collation_name, 'CodePage') <> 1252)
 					 OR ( col.is_computed = 1 )
 				 )
 	   ) as 'Unsupported'
@@ -322,7 +303,6 @@ select t.object_id as [ObjectId]
 	, (select count(*)
 			from tempdb.sys.objects
 			where UPPER(type) in ('TA','TR') AND parent_object_id = t.object_id ) as 'Triggers'
-    , @isEncrypted as 'TDE'
 	, t.is_tracked_by_cdc as 'CDC'
 	, (select count(*) 
 			from tempdb.sys.change_tracking_tables ctt with(READUNCOMMITTED)
@@ -348,20 +328,17 @@ select t.object_id as [ObjectId]
 									on col.user_type_id = tp.user_type_id
 							where t.object_id = col.object_id AND 
 								 (
-									 (UPPER(tp.name) in ('IMAGE','TEXT','NTEXT','TIMESTAMP','HIERARCHYID','SQL_VARIANT','XML','GEOGRAPHY','GEOMETRY','DATETIMEOFFSET','UNIQUEIDENTIFIER') OR
-									  (UPPER(tp.name) in ('VARCHAR','NVARCHAR','CHAR','NCHAR','BINARY','VARBINARY') and (col.max_length = 8000 or col.max_length = -1)) 
+									 (UPPER(tp.name) in ('IMAGE','TEXT','NTEXT','TIMESTAMP','HIERARCHYID','SQL_VARIANT','XML','GEOGRAPHY','GEOMETRY','DATETIMEOFFSET','UNIQUEIDENTIFIER') 
 									 )
-									 OR (col.collation_name is not null AND col.collation_name not like '%_bin2')
-									 OR (COLLATIONPROPERTY(col.collation_name, 'CodePage') <> 1252)
 									 OR ( col.is_computed = 1 )
 				 					) ) = 0 
 				and (select count(*)
 						from tempdb.sys.objects so
-							where UPPER(so.type) in ('PK','F','UQ','C','TA','TR') and parent_object_id = t.object_id ) = 0
+						where UPPER(so.type) in ('PK','F','UQ','TA','TR') and parent_object_id = t.object_id ) = 0
 				and (select count(*)
 						from tempdb.sys.indexes ind
 						where t.object_id = ind.object_id
-							and ind.type in (3,4,5,6) ) = 0			/* XML, Spatial, Columnstore CCI & NCCI */
+							and ind.type in (3,4) ) = 0
 				and (select count(*) 
 						from tempdb.sys.change_tracking_tables ctt with(READUNCOMMITTED)
 						where ctt.object_id = t.object_id and ctt.is_track_columns_updated_on = 1 
@@ -394,7 +371,7 @@ select [TableName], [Compression], [Row Count], [Size in GB], [Cols Count], [Sum
 	, [Clustered Index] as CI, [Nonclustered Indexes] as NCI
 	, isnull([Columnstore],'none') as [Columnstore]
 	, [XML Indexes], [Spatial Indexes], [Primary Key], [Foreign Keys], [Constraints]
-	, [Triggers], [TDE], [CDC], [CT], [Replication], [FileStream], [FileTable]
+	, [Triggers], [CDC], [CT], [Replication], [FileStream], [FileTable]
 	from #TablesToInMemory
 	order by [Size in GB] desc;
 
@@ -416,8 +393,6 @@ begin
 					(UPPER(tp.name) in ('VARCHAR','NVARCHAR','CHAR','NCHAR') and (col.max_length = 8000 or col.max_length = -1)) 
 					) 
 					OR col.is_computed = 1 
-				    OR (col.collation_name is not null AND col.collation_name not like '%_bin2')
-				    OR (COLLATIONPROPERTY(col.collation_name, 'CodePage') <> 1252)
 				  )
 			 and t.object_id in (select ObjectId from #TablesToInMemory);
 end
