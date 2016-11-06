@@ -1,6 +1,6 @@
 ﻿#	MOSL - Memory Optimized Scripts Library for SQL Server
 #	Powershell Script to setup the Stored Procedures & Tests for the MOSL
-#	Version: 1.3.1, August 2016
+#	Version: 1.4.0, October 2016
 #
 #	Copyright 2015-2016 Niko Neugebauer, OH22 IS (http://www.nikoport.com/), (http://www.oh22.is/)
 #
@@ -23,9 +23,22 @@ $scriptRootPath = Split-Path -Parent $PSCommandPath
 Get-Content $scriptRootPath\SQL-2014\StoredProcs\memopt_GetCheckpointFiles.sql, $scriptRootPath\SQL-2014\StoredProcs\memopt_GetDatabaseInfo.sql, `
             $scriptRootPath\SQL-2014\StoredProcs\memopt_GetGarbageCollector.sql, $scriptRootPath\SQL-2014\StoredProcs\memopt_GetHashIndexes.sql, `
             $scriptRootPath\SQL-2014\StoredProcs\memopt_GetLoadedModules.sql, $scriptRootPath\SQL-2014\StoredProcs\memopt_GetObjects.sql, `
-            $scriptRootPath\SQL-2014\StoredProcs\memopt_GetSQLInfo.sql, $scriptRootPath\SQL-2014\StoredProcs\memopt_GetTables.sql | `
+            $scriptRootPath\SQL-2014\StoredProcs\memopt_GetSQLInfo.sql, $scriptRootPath\SQL-2014\StoredProcs\memopt_GetTables.sql, `
+            $scriptRootPath\SQL-2014\StoredProcs\memopt_SuggestedTables.sql | `
     Set-Content $scriptRootPath\SQL-2014\StoredProcs\memopt_install_all_stored_procs.sql
 
 # Unit Tests for SQL Server 2014
 #Get-Content $scriptRootPath\Tests\SQL-2014\*.sql | Set-Content $scriptRootPath\Tests\sql-2014-tests.sql
+
+###############################################################################
+# SQL Server 2016
+Get-Content $scriptRootPath\SQL-2016\StoredProcs\memopt_GetCheckpointFiles.sql, $scriptRootPath\SQL-2016\StoredProcs\memopt_GetDatabaseInfo.sql, `
+            $scriptRootPath\SQL-2016\StoredProcs\memopt_GetGarbageCollector.sql, $scriptRootPath\SQL-2016\StoredProcs\memopt_GetHashIndexes.sql, `
+            $scriptRootPath\SQL-2016\StoredProcs\memopt_GetLoadedModules.sql, $scriptRootPath\SQL-2016\StoredProcs\memopt_GetObjects.sql, `
+            $scriptRootPath\SQL-2016\StoredProcs\memopt_GetSQLInfo.sql, $scriptRootPath\SQL-2016\StoredProcs\memopt_GetTables.sql, `
+            $scriptRootPath\SQL-2016\StoredProcs\memopt_SuggestedTables.sql | `
+    Set-Content $scriptRootPath\SQL-2016\StoredProcs\memopt_install_all_stored_procs.sql
+
+# Unit Tests for SQL Server 2016
+#Get-Content $scriptRootPath\Tests\SQL-2016\*.sql | Set-Content $scriptRootPath\Tests\sql-2016-tests.sql
 

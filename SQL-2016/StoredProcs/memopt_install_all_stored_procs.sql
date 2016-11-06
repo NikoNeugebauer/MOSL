@@ -1,5 +1,5 @@
 /*
-	Memory Optimised Library for SQL Server 2014: 
+	Memory Optimised Library for SQL Server 2016: 
 	Shows details for the Checkpoint Pair Files
 	Version: 0.2.0, November 2016
 
@@ -22,16 +22,16 @@ declare @SQLServerVersion nvarchar(128) = cast(SERVERPROPERTY('ProductVersion') 
 		@SQLServerEdition nvarchar(128) = cast(SERVERPROPERTY('Edition') as NVARCHAR(128));
 declare @errorMessage nvarchar(512);
 
- --Ensure that we are running SQL Server 2014
-if substring(@SQLServerVersion,1,CHARINDEX('.',@SQLServerVersion)-1) <> N'12'
+ --Ensure that we are running SQL Server 2016
+if substring(@SQLServerVersion,1,CHARINDEX('.',@SQLServerVersion)-1) <> N'13'
 begin
-	set @errorMessage = (N'You are not running a SQL Server 2014. Your SQL Server version is ' + @SQLServerVersion);
+	set @errorMessage = (N'You are not running a SQL Server 2016. Your SQL Server version is ' + @SQLServerVersion);
 	Throw 51000, @errorMessage, 1;
 end
 
 if SERVERPROPERTY('EngineEdition') <> 3 
 begin
-	set @errorMessage = (N'Your SQL Server 2014 Edition is not an Enterprise or a Developer Edition: Your are running a ' + @SQLServerEdition);
+	set @errorMessage = (N'Your SQL Server 2016 Edition is not an Enterprise or a Developer Edition: Your are running a ' + @SQLServerEdition);
 	Throw 51000, @errorMessage, 1;
 end
 
@@ -41,7 +41,7 @@ if NOT EXISTS (select * from sys.objects where type = 'p' and name = 'memopt_Get
 GO
 
 /*
-	Memory Optimised Library for SQL Server 2014: 
+	Memory Optimised Library for SQL Server 2016: 
 	Shows details for the Checkpoint Pair Files
 	Version: 0.2.0, November 2016
 */
@@ -58,23 +58,23 @@ alter procedure dbo.memopt_GetCheckpointFiles(
 ) as 
 begin
 	set nocount on;
-
 	
 	SELECT DB_NAME() as DatabaseName
 		,count(*) as TotalFiles
 		,SUM(case file_type when 1 then 1 when 0 then 1 else 0 end) / 2 as FilePairs
 		,cast(SUM((file_size_in_bytes)/(1024.*1024*1024)) as Decimal(9,3)) as ReservedSizeInGB
 		,cast(SUM((file_size_used_in_bytes)/(1024.*1024*1024)) as Decimal(9,3)) as UsedSizeInGB
-		,SUM(inserted_row_count) as InsertedRows
-		,SUM(deleted_row_count) + SUM(drop_table_deleted_row_count) as DeletedRows
+		,SUM(case file_type when 0 then logical_row_count end) as InsertedRows
+		,SUM(case file_type when 1 then logical_row_count end) as DeletedRows
 		,sum(case state when 0 then 1 else 0 end) as PreCreated
 		,sum(case state when 1 then 1 else 0 end) as UnderConstruction
 		,sum(case state when 2 then 1 else 0 end) as Active
 		,sum(case state when 3 then 1 else 0 end) as MergeTarget
 		,sum(case state when 4 then 1 else 0 end) as MergedSource
+		,sum(case state when 8 then 1 else 0 end) as LogTrancation
 		,sum(case state when 5 then 1 else 0 end) as [Backup/HA]
 		,sum(case state when 6 then 1 else 0 end) as Transition
-		,sum(case state when 7 then 1 else 0 end) as Tombstone
+		,sum(case state when 7 then 1 else 0 end) as Tombstone	
 		FROM sys.dm_db_xtp_checkpoint_files;
 
 	-- Details on the occupied space
@@ -83,12 +83,15 @@ begin
 		   [ACTIVE] as ActiveInMB,
 		   [MERGE TARGET] as MergeTargetInMB,
 		   [MERGED SOURCE] as MergedSourceInMB,
+		   [WAITING FOR LOG TRUNCATION] as WaitingForLogTruncationInMB,
 		   [REQUIRED FOR BACKUP/HA] as [Backup/HA in MB],
 		   [IN TRANSITION TO TOMBSTONE] as [TransitionInMB],
-		   [TOMBSTONE] as TombstoneInMB
+		   [TOMBSTONE] as TombstoneInMB,
+		   cast(EncryptionPercentage as Decimal(9,2)) as [EncryptionPercentage]
 		FROM
 		(
-		SELECT state_desc  
+		SELECT state_desc 
+			, isnull(sum(encryption_status) / (count(*) * 100.),0.) as EncryptionPercentage
 			--,file_type_desc  
 			--,COUNT(*) AS [count]  
 			,SUM(file_size_in_bytes) / 1024 / 1024 AS [SizeInMB]   
@@ -96,7 +99,7 @@ begin
 			GROUP BY state, state_desc--, file_type, file_type_desc  
 			--ORDER BY state, file_type  
 		) cfiles
-		PIVOT ( SUM(SizeInMB) FOR state_desc in ([PRECREATED],[UNDER CONSTRUCTION],[ACTIVE],[MERGE TARGET],[MERGED SOURCE],[REQUIRED FOR BACKUP/HA],[IN TRANSITION TO TOMBSTONE],[TOMBSTONE]) ) as PivotCFP;
+		PIVOT ( SUM(SizeInMB) FOR state_desc in ([PRECREATED],[UNDER CONSTRUCTION],[ACTIVE],[MERGE TARGET],[MERGED SOURCE],[REQUIRED FOR BACKUP/HA],[IN TRANSITION TO TOMBSTONE],[TOMBSTONE],[WAITING FOR LOG TRUNCATION]) ) as PivotCFP;
 
 
 
@@ -110,18 +113,19 @@ begin
 				file_type, file_type_desc, 
 				cast(file_size_in_bytes / 1024. / 1024 as Decimal(9,2)) as FileSizeInMB, 
 				cast(file_size_used_in_bytes / 1024. / 1024 as Decimal(9,2)) as FileSizeUsedInMB, 
-				inserted_row_count As InsertedRows,
-				deleted_row_count as DeletedRows,
-				drop_table_deleted_row_count as DropedRows,
+				case file_type when 0 then logical_row_count else 0 end as InsertedRows,
+				case file_type when 1 then logical_row_count else 0 end as DeletedRows,
+				0 as DropedRows,
 				lower_bound_tsn as BeginTSN,
-				upper_bound_tsn as EndTSN
+				upper_bound_tsn as EndTSN,
+				encryption_status_desc as Encryption
 			from sys.dm_db_xtp_checkpoint_files f
 			WHERE state_desc = ISNULL(@fileStateDesc,state_desc)
 				AND (file_type_desc = ISNULL(@fileTypeDesc,file_type_desc) OR (file_type_desc IS NULL and @fileTypeDesc IS NULL))
-				AND ISNULL(inserted_row_count,0) >=  ISNULL(@minInsertedRows, ISNULL(inserted_row_count,0))
-				AND ISNULL(inserted_row_count,0) <= ISNULL(@maxInsertedRows, ISNULL(inserted_row_count,0))
-				AND (ISNULL(deleted_row_count,0) + ISNULL(drop_table_deleted_row_count,0)) >= ISNULL(@minDeletedRows, (ISNULL(deleted_row_count,0) + ISNULL(drop_table_deleted_row_count,0)))
-				AND (ISNULL(deleted_row_count,0) + ISNULL(drop_table_deleted_row_count,0)) <= ISNULL(@maxDeletedRows, (ISNULL(deleted_row_count,0) + ISNULL(drop_table_deleted_row_count,0)))
+				AND isnull(case file_type when 0 then logical_row_count else 0 end,0) >= COALESCE(@minInsertedRows, case file_type when 0 then logical_row_count else 0 end,0)
+				AND isnull(case file_type when 0 then logical_row_count else 0 end,0) <= COALESCE(@maxInsertedRows, case file_type when 0 then logical_row_count else 0 end,0)
+				AND isnull(case file_type when 1 then logical_row_count end,0) >= COALESCE(@minDeletedRows, case file_type when 1 then logical_row_count end, 0)
+				AND isnull(case file_type when 1 then logical_row_count end,0) <= COALESCE(@maxDeletedRows, case file_type when 1 then logical_row_count end, 0)
 			ORDER BY f.state;
 	END
 
@@ -133,7 +137,7 @@ GO
 
 
 /*
-	Memory Optimised Library for SQL Server 2014: 
+	Memory Optimised Library for SQL Server 2016: 
 	Shows details for the Database Configuration
 	Version: 0.2.0, November 2016
 
@@ -162,16 +166,16 @@ declare @SQLServerVersion nvarchar(128) = cast(SERVERPROPERTY('ProductVersion') 
 		@SQLServerEdition nvarchar(128) = cast(SERVERPROPERTY('Edition') as NVARCHAR(128));
 declare @errorMessage nvarchar(512);
 
- --Ensure that we are running SQL Server 2014
-if substring(@SQLServerVersion,1,CHARINDEX('.',@SQLServerVersion)-1) <> N'12'
+ --Ensure that we are running SQL Server 2016
+if substring(@SQLServerVersion,1,CHARINDEX('.',@SQLServerVersion)-1) <> N'13'
 begin
-	set @errorMessage = (N'You are not running a SQL Server 2014. Your SQL Server version is ' + @SQLServerVersion);
+	set @errorMessage = (N'You are not running a SQL Server 2016. Your SQL Server version is ' + @SQLServerVersion);
 	Throw 51000, @errorMessage, 1;
 end
 
 if SERVERPROPERTY('EngineEdition') <> 3 
 begin
-	set @errorMessage = (N'Your SQL Server 2014 Edition is not an Enterprise or a Developer Edition: Your are running a ' + @SQLServerEdition);
+	set @errorMessage = (N'Your SQL Server 2016 Edition is not an Enterprise or a Developer Edition: Your are running a ' + @SQLServerEdition);
 	Throw 51000, @errorMessage, 1;
 end
 
@@ -181,7 +185,7 @@ if NOT EXISTS (select * from sys.objects where type = 'p' and name = 'memopt_Get
 GO
 
 /*
-	Memory Optimised Library for SQL Server 2014: 
+	Memory Optimised Library for SQL Server 2016: 
 	Shows details for the Database Configuration
 	Version: 0.2.0, November 2016
 */
@@ -255,7 +259,7 @@ END
 
 GO
 /*
-	Memory Optimised Library for SQL Server 2014: 
+	Memory Optimised Library for SQL Server 2016: 
 	Shows details for the Garbage Collector
 	Version: 0.2.0, November 2016
 
@@ -284,16 +288,16 @@ declare @SQLServerVersion nvarchar(128) = cast(SERVERPROPERTY('ProductVersion') 
 		@SQLServerEdition nvarchar(128) = cast(SERVERPROPERTY('Edition') as NVARCHAR(128));
 declare @errorMessage nvarchar(512);
 
--- Ensure that we are running SQL Server 2014
-if substring(@SQLServerVersion,1,CHARINDEX('.',@SQLServerVersion)-1) <> N'12'
+-- Ensure that we are running SQL Server 2016
+if substring(@SQLServerVersion,1,CHARINDEX('.',@SQLServerVersion)-1) <> N'13'
 begin
-	set @errorMessage = (N'You are not running a SQL Server 2014. Your SQL Server version is ' + @SQLServerVersion);
+	set @errorMessage = (N'You are not running a SQL Server 2016. Your SQL Server version is ' + @SQLServerVersion);
 	Throw 51000, @errorMessage, 1;
 end
 
 if SERVERPROPERTY('EngineEdition') <> 3 
 begin
-	set @errorMessage = (N'Your SQL Server 2014 Edition is not an Enterprise or a Developer Edition: Your are running a ' + @SQLServerEdition);
+	set @errorMessage = (N'Your SQL Server 2016 Edition is not an Enterprise or a Developer Edition: Your are running a ' + @SQLServerEdition);
 	Throw 51000, @errorMessage, 1;
 end
 
@@ -303,7 +307,7 @@ if NOT EXISTS (select * from sys.objects where type = 'p' and name = 'memopt_Get
 GO
 
 /*
-	Memory Optimised Library for SQL Server 2014: 
+	Memory Optimised Library for SQL Server 2016: 
 	Shows details for the Garbage Collector
 	Version: 0.2.0, November 2016
 */
@@ -344,7 +348,7 @@ END
 
 GO
 /*
-	Memory Optimised Library for SQL Server 2014: 
+	Memory Optimised Library for SQL Server 2016: 
 	Shows details for the Hash Indexes of the Memory Optimized Tables
 	Version: 0.2.0, November 2016
 
@@ -373,16 +377,16 @@ declare @SQLServerVersion nvarchar(128) = cast(SERVERPROPERTY('ProductVersion') 
 		@SQLServerEdition nvarchar(128) = cast(SERVERPROPERTY('Edition') as NVARCHAR(128));
 declare @errorMessage nvarchar(512);
 
- --Ensure that we are running SQL Server 2014
-if substring(@SQLServerVersion,1,CHARINDEX('.',@SQLServerVersion)-1) <> N'12'
+ --Ensure that we are running SQL Server 2016
+if substring(@SQLServerVersion,1,CHARINDEX('.',@SQLServerVersion)-1) <> N'13'
 begin
-	set @errorMessage = (N'You are not running a SQL Server 2014. Your SQL Server version is ' + @SQLServerVersion);
+	set @errorMessage = (N'You are not running a SQL Server 2016. Your SQL Server version is ' + @SQLServerVersion);
 	Throw 51000, @errorMessage, 1;
 end
 
 if SERVERPROPERTY('EngineEdition') <> 3 
 begin
-	set @errorMessage = (N'Your SQL Server 2014 Edition is not an Enterprise or a Developer Edition: Your are running a ' + @SQLServerEdition);
+	set @errorMessage = (N'Your SQL Server 2016 Edition is not an Enterprise or a Developer Edition: Your are running a ' + @SQLServerEdition);
 	Throw 51000, @errorMessage, 1;
 end
 
@@ -392,7 +396,7 @@ if NOT EXISTS (select * from sys.objects where type = 'p' and name = 'memopt_Get
 GO
 
 /*
-	Memory Optimised Library for SQL Server 2014: 
+	Memory Optimised Library for SQL Server 2016: 
 	Shows details for the Hash Indexes of the Memory Optimized Tables
 	Version: 0.2.0, November 2016
 */
@@ -413,21 +417,25 @@ begin
 	SELECT  
 		quotename(object_schema_name(t.object_id)) + '.' + quotename(object_name(t.object_id)) as TableName,   
 		i.name as IndexName,   
-		ISNULL(st.rows,0) as TotalRows,
-		cast(st.last_updated as DateTime2(0)) as StatsUpdated,
+		part.rows as TotalRows, 
 		h.total_bucket_count as TotalBuckets,  
-		h.empty_bucket_count as EmptyBuckets,  
+		h.empty_bucket_count as EmptyBuckets, 
 		CAST(( (h.empty_bucket_count * 1.) / h.total_bucket_count) * 100 as Decimal(9,3) ) as EmptyBucketPercent,  
 		h.avg_chain_length as AvgChainLength,   
 		h.max_chain_length as MaxChainLength
 		FROM sys.dm_db_xtp_hash_index_stats as h   
-			INNER JOIN sys.indexes  as i  
+			INNER JOIN sys.indexes as i  
 				ON h.object_id = i.object_id  
 			   AND h.index_id = i.index_id  
+			INNER JOIN sys.memory_optimized_tables_internal_attributes ia 
+				ON h.xtp_object_id = ia.xtp_object_id 
 			INNER JOIN sys.tables t 
 				ON h.object_id = t.object_id
-			OUTER APPLY sys.dm_db_stats_properties (i.object_id,i.index_id) st
-		WHERE h.avg_chain_length >= @minAvgChainLength
+			INNER JOIN sys.partitions part
+				ON part.object_id = i.object_id and part.index_id = i.index_id
+			--OUTER APPLY sys.dm_db_stats_properties (i.object_id,i.index_id) st
+		WHERE ia.type = 1 /* Index */
+			AND h.avg_chain_length >= @minAvgChainLength
 			AND h.max_chain_length >= @minMaxChainLrngth
 			AND ((h.empty_bucket_count * 1.) / h.total_bucket_count) * 100 >= ISNULL( @minEmptyBucketPercent, 0 )
 			AND ((h.empty_bucket_count * 1.) / h.total_bucket_count) * 100 <= ISNULL( @maxEmptyBucketPercent, 100 )
@@ -435,12 +443,13 @@ begin
 			AND (@tableName is null or object_name(t.object_id) like '%' + @tableName + '%')
 			AND (@schemaName is null or schema_name(t.schema_id) = @schemaName)
 		ORDER BY tableName, indexName;  
+ 
 
 END
 
 GO
 /*
-	Memory Optimised Library for SQL Server 2014: 
+	Memory Optimised Library for SQL Server 2016: 
 	Shows details for the Loaded Memory Optimized Modules
 	Version: 0.2.0, November 2016
 
@@ -469,16 +478,16 @@ declare @SQLServerVersion nvarchar(128) = cast(SERVERPROPERTY('ProductVersion') 
 		@SQLServerEdition nvarchar(128) = cast(SERVERPROPERTY('Edition') as NVARCHAR(128));
 declare @errorMessage nvarchar(512);
 
- --Ensure that we are running SQL Server 2014
-if substring(@SQLServerVersion,1,CHARINDEX('.',@SQLServerVersion)-1) <> N'12'
+ --Ensure that we are running SQL Server 2016
+if substring(@SQLServerVersion,1,CHARINDEX('.',@SQLServerVersion)-1) <> N'13'
 begin
-	set @errorMessage = (N'You are not running a SQL Server 2014. Your SQL Server version is ' + @SQLServerVersion);
+	set @errorMessage = (N'You are not running a SQL Server 2016. Your SQL Server version is ' + @SQLServerVersion);
 	Throw 51000, @errorMessage, 1;
 end
 
 if SERVERPROPERTY('EngineEdition') <> 3 
 begin
-	set @errorMessage = (N'Your SQL Server 2014 Edition is not an Enterprise or a Developer Edition: Your are running a ' + @SQLServerEdition);
+	set @errorMessage = (N'Your SQL Server 2016 Edition is not an Enterprise or a Developer Edition: Your are running a ' + @SQLServerEdition);
 	Throw 51000, @errorMessage, 1;
 end
 
@@ -488,7 +497,7 @@ if NOT EXISTS (select * from sys.objects where type = 'p' and name = 'memopt_Get
 GO
 
 /*
-	Memory Optimised Library for SQL Server 2014: 
+	Memory Optimised Library for SQL Server 2016: 
 	Shows details for the Loaded Memory Optimized Modules
 	Version: 0.2.0, November 2016
 */
@@ -517,19 +526,18 @@ begin
 		md.description, 
 		--md.file_version,
 		--md.product_version,
-		--substring(md.name, 0, len(md.name) - charindex('_',reverse(md.name)) + 1 ),
-		--charindex('_', reverse(substring(md.name, 0, len(md.name) - charindex('_',reverse(md.name)) + 1 ))), 
-		substring(substring(md.name, 0, len(md.name) - charindex('_',reverse(md.name)) + 1 ), 
-				  len(substring(md.name, 0, len(md.name) - charindex('_',reverse(md.name)) + 1 )) - charindex('_', reverse(substring(md.name, 0, len(md.name) - charindex('_',reverse(md.name)) + 1 ))) + 2, 10 ) as DatabaseId
-		--replace(substring(md.name, len(md.name) - charindex('_',reverse(md.name)) + 2, len(md.name) ), '.dll', '') as ObjectId,
-		--object_name( replace(substring(md.name, len(md.name) - charindex('_',reverse(md.name)) + 2, len(md.name) ), '.dll', '') ) as ObjectName,
+		--substring(md.name, 0, len(md.name) - charindex('\',reverse(md.name)) + 1 ) as X,	
+		--substring(substring(md.name, 0, len(md.name) - charindex('_',reverse(md.name)) + 1 ), 
+		--		  len(substring(md.name, 0, len(md.name) - charindex('_',reverse(md.name)) + 1 )) - charindex('_', reverse(substring(md.name, 0, len(md.name) - charindex('_',reverse(md.name)) + 1 ))) + 2, 10 ) as DatabaseId
+		DB_ID() as DatabaseId
 		--*
 		FROM sys.dm_os_loaded_modules md  
 			LEFT JOIN sys.objects obj
-				ON replace(substring(md.name, len(md.name) - charindex('_',reverse(md.name)) + 2, len(md.name) ), '.dll', '')  = obj.object_id
+				ON cast( substring(substring(md.name, 0, len(md.name) - charindex('_',reverse(md.name)) + 1 ), 
+							len(substring(md.name, 0, len(md.name) - charindex('_',reverse(md.name)) + 1 )) - charindex('_', reverse(substring(md.name, 0, len(md.name) - charindex('_',reverse(md.name)) + 1 ))) + 2, 10 ) as bigint) = obj.object_id
 		WHERE description = 'XTP Native DLL'  
-			AND substring(substring(md.name, 0, len(md.name) - charindex('_',reverse(md.name)) + 1 ), 
-				  len(substring(md.name, 0, len(md.name) - charindex('_',reverse(md.name)) + 1 )) - charindex('_', reverse(substring(md.name, 0, len(md.name) - charindex('_',reverse(md.name)) + 1 ))) + 2, 10 ) = cast(DB_ID() as varchar(10))	
+			--AND substring(substring(md.name, 0, len(md.name) - charindex('_',reverse(md.name)) + 1 ), 
+			--	  len(substring(md.name, 0, len(md.name) - charindex('_',reverse(md.name)) + 1 )) - charindex('_', reverse(substring(md.name, 0, len(md.name) - charindex('_',reverse(md.name)) + 1 ))) + 2, 10 ) = cast(DB_ID() as varchar(10))	
 			AND quotename(object_name(obj.object_id)) like '%' + isnull(@objectName,'') + '%'
 			AND(case obj.type_desc 
 					when 'USER_TABLE' then 'Table' 
@@ -540,14 +548,13 @@ begin
 					when 'SQL_SCALAR_FUNCTION' then 'Scalar Function'
 					when 'SQL_TABLE_VALUED_FUNCTION' then 'Table Valued Function'
 				end = @objectType OR @objectType IS NULL )
-		ORDER BY quotename(object_schema_name(obj.object_id)) + '.' + quotename(object_name(obj.object_id));
-
+		ORDER BY quotename(object_schema_name(obj.object_id)) + '.' + quotename(object_name(obj.object_id)) 
 END
 
 GO
 
 /*
-	Memory Optimised Library for SQL Server 2014: 
+	Memory Optimised Library for SQL Server 2016: 
 	Shows details for the Memory Optimised Objects within the database
 	Version: 0.2.0, November 2016
 
@@ -576,16 +583,16 @@ declare @SQLServerVersion nvarchar(128) = cast(SERVERPROPERTY('ProductVersion') 
 		@SQLServerEdition nvarchar(128) = cast(SERVERPROPERTY('Edition') as NVARCHAR(128));
 declare @errorMessage nvarchar(512);
 
- --Ensure that we are running SQL Server 2014
-if substring(@SQLServerVersion,1,CHARINDEX('.',@SQLServerVersion)-1) <> N'12'
+ --Ensure that we are running SQL Server 2016
+if substring(@SQLServerVersion,1,CHARINDEX('.',@SQLServerVersion)-1) <> N'13'
 begin
-	set @errorMessage = (N'You are not running a SQL Server 2014. Your SQL Server version is ' + @SQLServerVersion);
+	set @errorMessage = (N'You are not running a SQL Server 2016. Your SQL Server version is ' + @SQLServerVersion);
 	Throw 51000, @errorMessage, 1;
 end
 
 if SERVERPROPERTY('EngineEdition') <> 3 
 begin
-	set @errorMessage = (N'Your SQL Server 2014 Edition is not an Enterprise or a Developer Edition: Your are running a ' + @SQLServerEdition);
+	set @errorMessage = (N'Your SQL Server 2016 Edition is not an Enterprise or a Developer Edition: Your are running a ' + @SQLServerEdition);
 	Throw 51000, @errorMessage, 1;
 end
 
@@ -595,7 +602,7 @@ if NOT EXISTS (select * from sys.objects where type = 'p' and name = 'memopt_Get
 GO
 
 /*
-	Memory Optimised Library for SQL Server 2014: 
+	Memory Optimised Library for SQL Server 2016: 
 	Shows details for the Memory Optimised Objects within the database
 	Version: 0.2.0, November 2016
 */
@@ -750,7 +757,7 @@ END
 
 GO
 /*
-	Memory Optimised Library for SQL Server 2014: 
+	Memory Optimised Library for SQL Server 2016: 
 	SQL Server Instance Information - Provides with the list of the known SQL Server versions that have bugfixes or improvements over your current version + lists currently enabled trace flags on the instance & session
 	Version: 0.2.0, November 2016
 
@@ -772,23 +779,22 @@ GO
 /*
 	Known Issues & Limitations: 
 		- Custom non-standard (non-CU & non-SP) versions are not targeted yet
-		- Duplicate Fixes & Improvements (CU12 for SP1 & CU2 for SP2, for example) are not eliminated from the list yet
 */
 
 declare @SQLServerVersion nvarchar(128) = cast(SERVERPROPERTY('ProductVersion') as NVARCHAR(128)), 
 		@SQLServerEdition nvarchar(128) = cast(SERVERPROPERTY('Edition') as NVARCHAR(128));
 declare @errorMessage nvarchar(512);
 
- --Ensure that we are running SQL Server 2014
-if substring(@SQLServerVersion,1,CHARINDEX('.',@SQLServerVersion)-1) <> N'12'
+ --Ensure that we are running SQL Server 2016
+if substring(@SQLServerVersion,1,CHARINDEX('.',@SQLServerVersion)-1) <> N'13'
 begin
-	set @errorMessage = (N'You are not running a SQL Server 2014. Your SQL Server version is ' + @SQLServerVersion);
+	set @errorMessage = (N'You are not running a SQL Server 2016. Your SQL Server version is ' + @SQLServerVersion);
 	Throw 51000, @errorMessage, 1;
 end
 
 if SERVERPROPERTY('EngineEdition') <> 3 
 begin
-	set @errorMessage = (N'Your SQL Server 2014 Edition is not an Enterprise or a Developer Edition: Your are running a ' + @SQLServerEdition);
+	set @errorMessage = (N'Your SQL Server 2016 Edition is not an Enterprise or a Developer Edition: Your are running a ' + @SQLServerEdition);
 	Throw 51000, @errorMessage, 1;
 end
 
@@ -798,7 +804,7 @@ if NOT EXISTS (select * from sys.objects where type = 'p' and name = 'memopt_Get
 GO
 
 /*
-	Memory Optimised Library for SQL Server 2014: 
+	Memory Optimised Library for SQL Server 2016: 
 	SQL Server Instance Information - Provides with the list of the known SQL Server versions that have bugfixes or improvements over your current version + lists currently enabled trace flags on the instance & session
 	Version: 0.2.0, November 2016
 */
@@ -806,7 +812,7 @@ alter procedure dbo.memopt_GetSQLInfo(
 -- Params --
 	@showUnrecognizedTraceFlags bit = 1,		-- Enables showing active trace flags, even if they are not columnstore indexes related
 	@identifyCurrentVersion bit = 1,			-- Enables identification of the currently used SQL Server Instance version
-	@showNewerVersions bit = 1					-- Enables showing the SQL Server versions that are posterior the current version
+	@showNewerVersions bit = 0					-- Enables showing the SQL Server versions that are posterior the current version
 -- end of --
 ) as 
 begin
@@ -848,69 +854,49 @@ begin
 		ReleaseDate datetime not null,
 		SQLVersionDescription nvarchar(100) );
 
+
 	insert into #SQLBranches (SQLBranch, MinVersion)
-		values ('RTM', 2000 ), ('SP1', 4100), ('SP2', 5000) ;
+		values ('CTP', 200 ), ( 'RC0', 1100 ), ( 'RC1', 1200 ), ( 'RC2', 1300 ), ( 'RC3', 1400 ), ( 'RTM', 1601 );
 
 	insert #SQLVersions( SQLBranch, SQLVersion, ReleaseDate, SQLVersionDescription )
 		values 
-		( 'RTM', 2000, convert(datetime,'01-04-2014',105), 'SQL Server 2014 RTM' ),
-		( 'RTM', 2342, convert(datetime,'21-04-2014',105), 'CU 1 for SQL Server 2014 RTM' ),
-		( 'RTM', 2370, convert(datetime,'27-06-2014',105), 'CU 2 for SQL Server 2014 RTM' ),
-		( 'RTM', 2402, convert(datetime,'18-08-2014',105), 'CU 3 for SQL Server 2014 RTM' ),
-		( 'RTM', 2430, convert(datetime,'21-10-2014',105), 'CU 4 for SQL Server 2014 RTM' ),
-		( 'RTM', 2456, convert(datetime,'18-12-2014',105), 'CU 5 for SQL Server 2014 RTM' ),
-		( 'RTM', 2480, convert(datetime,'16-02-2015',105), 'CU 6 for SQL Server 2014 RTM' ),
-		( 'RTM', 2495, convert(datetime,'23-04-2015',105), 'CU 7 for SQL Server 2014 RTM' ),
-		( 'RTM', 2546, convert(datetime,'22-06-2015',105), 'CU 8 for SQL Server 2014 RTM' ),
-		( 'RTM', 2553, convert(datetime,'17-08-2015',105), 'CU 9 for SQL Server 2014 RTM' ),
-		( 'RTM', 2556, convert(datetime,'20-10-2015',105), 'CU 10 for SQL Server 2014 RTM' ),
-		( 'RTM', 2560, convert(datetime,'22-12-2015',105), 'CU 11 for SQL Server 2014 RTM' ),
-		( 'RTM', 2564, convert(datetime,'22-02-2016',105), 'CU 12 for SQL Server 2014 RTM' ),
-		( 'RTM', 2568, convert(datetime,'19-04-2016',105), 'CU 13 for SQL Server 2014 RTM' ),
-		( 'RTM', 2569, convert(datetime,'20-06-2016',105), 'CU 14 for SQL Server 2014 RTM' ),
-		( 'SP1', 4100, convert(datetime,'14-05-2015',105), 'SQL Server 2014 SP1' ),
-		( 'SP1', 4416, convert(datetime,'22-06-2015',105), 'CU 1 for SQL Server 2014 SP1' ),
-		( 'SP1', 4422, convert(datetime,'17-08-2015',105), 'CU 2 for SQL Server 2014 SP1' ),
-		( 'SP1', 4427, convert(datetime,'21-10-2015',105), 'CU 3 for SQL Server 2014 SP1' ),
-		( 'SP1', 4436, convert(datetime,'22-12-2015',105), 'CU 4 for SQL Server 2014 SP1' ),
-		( 'SP1', 4439, convert(datetime,'22-02-2016',105), 'CU 5 for SQL Server 2014 SP1' ),
-		( 'SP1', 4449, convert(datetime,'19-04-2016',105), 'CU 6 for SQL Server 2014 SP1' ),
-		( 'SP1', 4457, convert(datetime,'31-05-2016',105), 'CU 6A for SQL Server 2014 SP1' ),
-		( 'SP1', 4459, convert(datetime,'20-06-2016',105), 'CU 7 for SQL Server 2014 SP1' ),
-		( 'SP1', 4468, convert(datetime,'15-08-2016',105), 'CU 8 for SQL Server 2014 SP1' ),
-		( 'SP1', 4474, convert(datetime,'18-10-2016',105), 'CU 9 for SQL Server 2014 SP1' ),
-		( 'SP2', 5000, convert(datetime,'11-07-2016',105), 'SQL Server 2014 SP2' ),
-		( 'SP2', 5511, convert(datetime,'25-08-2016',105), 'CU 1 for SQL Server 2014 SP2' ),
-		( 'SP2', 5522, convert(datetime,'18-10-2016',105), 'CU 2 for SQL Server 2014 SP2' );
+		( 'CTP', 200, convert(datetime,'27-05-2015',105), 'CTP 2 for SQL Server 2016' ),
+		( 'CTP', 300, convert(datetime,'24-06-2015',105), 'CTP 2.1 for SQL Server 2016' ),
+		( 'CTP', 400, convert(datetime,'23-07-2015',105), 'CTP 2.2 for SQL Server 2016' ),
+		( 'CTP', 500, convert(datetime,'28-08-2015',105), 'CTP 2.3 for SQL Server 2016' ),
+		( 'CTP', 600, convert(datetime,'30-09-2015',105), 'CTP 2.4 for SQL Server 2016' ),
+		( 'CTP', 700, convert(datetime,'28-10-2015',105), 'CTP 3 for SQL Server 2016' ),
+		( 'CTP', 800, convert(datetime,'30-11-2015',105), 'CTP 3.1 for SQL Server 2016' ),
+		( 'CTP', 900, convert(datetime,'16-12-2015',105), 'CTP 3.2 for SQL Server 2016' ),
+		( 'CTP', 1000, convert(datetime,'03-02-2016',105), 'CTP 3.3 for SQL Server 2016' ),
+		( 'RC0', 1100, convert(datetime,'07-03-2016',105), 'RC 0 for SQL Server 2016' ),
+		( 'RC1', 1200, convert(datetime,'16-03-2016',105), 'RC 1 for SQL Server 2016' ),
+		( 'RC2', 1300, convert(datetime,'01-04-2016',105), 'RC 2 for SQL Server 2016' ),
+		( 'RC3', 1400, convert(datetime,'15-04-2016',105), 'RC 3 for SQL Server 2016' ),
+		( 'RTM', 1601, convert(datetime,'01-06-2016',105), 'RTM for SQL Server 2016' ),
+		( 'RTM', 2149, convert(datetime,'25-07-2016',105), 'CU 1 for SQL Server 2016' ),
+		( 'RTM', 2164, convert(datetime,'22-09-2016',105), 'CU 2 for SQL Server 2016' ),
+		( 'RTM', 2169, convert(datetime,'26-10-2016',105), 'On-Demand fix for CU 2 for SQL Server 2016' ),
+		( 'RTM', 2170, convert(datetime,'01-11-2016',105), 'On-Demand fix for CU 2 for SQL Server 2016' );
 
 
 	insert into #SQLMemOptImprovements (BuildVersion, SQLBranch, Description, URL )
 		values 
-		( 2342, 'RTM', 'FIX: Errors when you join memory-optimized table to memory-optimized table type at RCSI in SQL Server 2014', 'https://support.microsoft.com/en-us/kb/2936896' ),
-		( 2342, 'RTM', 'FIX: An access violation occurs when you try to use datepart (weekday) in a natively compiled stored procedure in SQL Server 2014', 'https://support.microsoft.com/en-us/kb/2938460' ),
-		( 2342, 'RTM', 'FIX: Incorrect message type when you restart a SQL Server 2014 instance that has Hekaton databases', 'https://support.microsoft.com/en-us/kb/2938461' ),
-		( 2342, 'RTM', 'FIX: Missing or wrong information about missing indexes is returned when you query in SQL Server 2014', 'https://support.microsoft.com/en-us/kb/2938462' ),
-		( 2342, 'RTM', 'FIX: No missing index recommendation is displayed when the index is not the correct type for the query in SQL Server 2014', 'https://support.microsoft.com/en-us/kb/2938463' ),
-		( 2342, 'RTM', 'FIX: Cannot use showplan_xml for the query/procedure when you create a natively compiled stored procedure with a query that contains a large expression in SQL Server 2014', 'https://support.microsoft.com/en-us/kb/2938464' ),
-		( 2342, 'RTM', 'FIX: Worker time in the DMVs sys.dm_exec_procedure_stats and sys.dm_exec_query_stats for natively compiled stored procedures is reported incorrectly in SQL Server 2014', 'https://support.microsoft.com/en-us/kb/2940348' ),
-		( 2370, 'RTM', 'FIX: Error in checking master database after you bind a memory-optimized database to a resource pool in SQL Server 2014', 'https://support.microsoft.com/en-us/kb/2968023' ),
-		( 2370, 'RTM', 'FIX: Sys.indexes returns incorrect value for indexes in SQL Server 2014', 'https://support.microsoft.com/en-us/kb/2969741' ),
-		( 2402, 'RTM', 'FIX: Cannot open the memory-optimized table template remotely in SQL Server 2014', 'https://support.microsoft.com/en-us/kb/2960924' ), 
-		( 2402, 'RTM', 'FIX: "Non-yielding scheduler" error when you insert or update many rows in one transaction in SQL Server 2014', 'https://support.microsoft.com/en-us/kb/2968418' ),
-		( 2402, 'RTM', 'FIX: Auto-statistics creation increases the compilation time for natively compiled stored procedure in SQL Server 2014', 'https://support.microsoft.com/en-us/kb/2984628' ),
-		( 2402, 'RTM', 'FIX: LCK_M_SCH_M occurs when you access memory-optimized table variables outside natively compiled stored procedures', 'https://support.microsoft.com/en-us/kb/2984629' ),
-		( 2430, 'RTM', 'FIX: Cannot recover the In-Memory OLTP database after you enable and then disable TDE on it in SQL Server 2014', 'https://support.microsoft.com/en-us/kb/2974169' ),
-		( 2456, 'RTM', 'FIX: RTDATA_LIST waits when you run natively stored procedures that encounter expected failures in SQL Server 2014', 'https://support.microsoft.com/en-us/kb/3007050' ),
-		( 2568, 'RTM', 'FIX: SQL Server 2014 crashes when you execute a query that contains a NONEXISTENT query hint on an In-Memory OLTP database', 'https://support.microsoft.com/en-us/kb/3138775' ),	
-		( 4422, 'SP1', 'FIX: Increased wait time of HADR_SYNC_COMMIT wait types when you have memory-optimized tables defined in at least one availability group database', 'https://support.microsoft.com/en-us/kb/3081291' ),
-		( 4427, 'SP1', 'FIX: Can’t backup in-memory OLTP database that is restored by using full and differential restore in SQL Server 2014', 'https://support.microsoft.com/en-us/kb/3096617' ),
-		( 4427, 'SP1', 'FIX: 100% CPU usage occurs when in-memory OLTP database is in recovery state in SQL Server 2014', 'https://support.microsoft.com/en-us/kb/3099487' ),
-		( 4427, 'SP1', 'FIX: Offline checkpoint thread shuts down without providing detailed exception information in SQL Server 2014', 'https://support.microsoft.com/en-us/kb/3090141' ),
-		( 4457, 'SP1', 'FIX: Large disk checkpoint usage occurs for an In-Memory optimized filegroup during heavy non-In-Memory workloads', 'https://support.microsoft.com/en-us/kb/3147012' ),	
-		( 4459, 'SP1', 'FIX: SQL Server 2014 crashes when you execute a query that contains a NONEXISTENT query hint on an In-Memory OLTP database', 'https://support.microsoft.com/en-us/kb/3138775' ),	
-		( 4468, 'SP1', 'FIX: Garbage collection in In-Memory OLTP may cause "non-yielding scheduler" in SQL Server 2014', 'https://support.microsoft.com/en-us/kb/3177132' );
+		( 2149, 'RTM', 'Creating or updating statistics takes a long time on a large memory-optimized table in SQL Server 2016', 'https://support.microsoft.com/en-us/kb/3170996' ),
+		( 2149, 'RTM', 'A deadlock condition occurs when you make updates on a memory-optimized temporal table and you run the SWITCH PARTITION statement on a history table in SQL Server 2016 ', 'https://support.microsoft.com/en-us/kb/3174712' ),
+		( 2149, 'RTM', 'FIX: Secondary replica in "not healthy" state after you upgrade the primary database in SQL Server 2016 ', 'https://support.microsoft.com/en-us/kb/31718630' ),
+		( 2149, 'RTM', 'FIX: Checkpoint files are missing from sys.dm_db_xtp_checkpoint_files on SQL Server 2016', 'https://support.microsoft.com/en-us/kb/3173975' ),
+		( 2149, 'RTM', 'SQL Server 2016 database log restore fails with the "Hk Recovery LSN is not NullLSN" error message', 'https://support.microsoft.com/en-us/kb/3171002' ),
+		( 2149, 'RTM', 'FIX: Data loss when you alter column operation on a large memory-optimized table in SQL Server 2016', 'https://support.microsoft.com/en-us/kb/3174963' ),
+		( 2149, 'RTM', 'FIX: Large disk checkpoint usage occurs for an In-Memory optimized filegroup during heavy non-In-Memory workloads', 'https://support.microsoft.com/en-us/kb/3147012' ),
+		( 2149, 'RTM', 'FIX: Slow database recovery in SQL Server 2016 due to large log when you use In-Memory OLTP on a high-end computer', 'https://support.microsoft.com/en-us/kb/3171001' ),
+		( 2149, 'RTM', 'Data Flush Tasks of a memory-optimized temporal table may consume 100-percent CPU usage in SQL Server 2016', 'https://support.microsoft.com/en-us/kb/3174713' ),
+		( 2149, 'RTM', 'FIX: Error 5120 when you create or use a FILESTREAM-enabled database on a dynamic disk in an instance of SQL Server 2014 or 2016', 'https://support.microsoft.com/en-us/kb/3152377' ),
+		( 2149, 'RTM', 'FIX: Fatal Error when you run a query against the sys.sysindexes view in SQL Server 2016', 'https://support.microsoft.com/en-us/kb/3173976' ),
+		( 2149, 'RTM', 'Data loss or incorrect results occur when you use the sp_settriggerorder stored procedure in SQL Server 2016', 'https://support.microsoft.com/en-us/kb/3173004' ),
+		( 2149, 'RTM', 'A data flush task may cause a deadlock condition when queries are executed on a memory-optimized table in SQL Server 2016', 'https://support.microsoft.com/en-us/kb/3173004' );
 
-
+	
 	if @identifyCurrentVersion = 1
 	begin
 		if OBJECT_ID('tempdb..#TempVersionResults') IS NOT NULL
@@ -974,9 +960,12 @@ begin
 		having min(imps.BuildVersion) = (select min(imps2.BuildVersion)	from #SQLMemOptImprovements imps2 where imps.Description = imps2.Description and imps2.BuildVersion > @SQLServerBuild group by imps2.Description)
 		order by BuildVersion;
 
-	drop table #SQLMemOptImprovements;
-	drop table #SQLBranches;
-	drop table #SQLVersions;
+
+	drop table if exists #SQLMemOptImprovements;
+	drop table if exists #SQLBranches;
+	drop table if exists #SQLVersions;
+	drop table if exists #ActiveTraceFlags;
+	drop table if exists #ColumnstoreTraceFlags;
 
 	--------------------------------------------------------------------------------------------------------------------
 	-- Trace Flags part
@@ -1001,7 +990,10 @@ begin
 		( 1851, 'Disables automerge for CFP', '', 0 ),
 		( 9989, 'Enables Reading In-Memory Tables on the secondary replicas of AlwaysOn Availability Groups', 'https://connect.microsoft.com/SQLServer/feedback/details/795360/secondary-db-gets-suspect-when-i-add-in-memory-table-to-db-which-is-part-of-alwayson-availability-group', 0 ),
 		( 9851, 'Disables automated merge process', '', 0 ),
-		( 9837, 'Enables extra-tracing informations for the checkpoint files', '', 0 );
+		( 9837, 'Enables extra-tracing informations for the checkpoint files', '', 0 ),
+		( 9926, 'Removes the limit on the number of transactions that can depend on a given transaction', '', 0 ),
+		( 9912, 'Disables large checkpoints', 'https://beanalytics.wordpress.com/2016/05/20/logging-and-checkpoint-process-for-memory-optimized-tables-in-sql-2016/', 0 );
+
 
 	select tf.TraceFlag, isnull(conf.Description,'Unrecognized') as Description, isnull(conf.URL,'-') as URL, SupportedStatus
 		from #ActiveTraceFlags tf
@@ -1009,14 +1001,15 @@ begin
 				on conf.TraceFlag = tf.TraceFlag
 		where @showUnrecognizedTraceFlags = 1 or (@showUnrecognizedTraceFlags = 0 AND Description is not null);
 
-	drop table #ColumnstoreTraceFlags;
-	drop table #ActiveTraceFlags;
+	drop table if exists #ColumnstoreTraceFlags;
+	drop table if exists #ActiveTraceFlags;
+
 
 END
 
 GO
 /*
-	Memory Optimised Library for SQL Server 2014: 
+	Memory Optimised Library for SQL Server 2016: 
 	Shows details for the Memory Optimised Tables within the database
 	Version: 0.2.0, November 2016
 
@@ -1045,16 +1038,16 @@ declare @SQLServerVersion nvarchar(128) = cast(SERVERPROPERTY('ProductVersion') 
 		@SQLServerEdition nvarchar(128) = cast(SERVERPROPERTY('Edition') as NVARCHAR(128));
 declare @errorMessage nvarchar(512);
 
- --Ensure that we are running SQL Server 2014
-if substring(@SQLServerVersion,1,CHARINDEX('.',@SQLServerVersion)-1) <> N'12'
+ --Ensure that we are running SQL Server 2016
+if substring(@SQLServerVersion,1,CHARINDEX('.',@SQLServerVersion)-1) <> N'13'
 begin
-	set @errorMessage = (N'You are not running a SQL Server 2014. Your SQL Server version is ' + @SQLServerVersion);
+	set @errorMessage = (N'You are not running a SQL Server 2016. Your SQL Server version is ' + @SQLServerVersion);
 	Throw 51000, @errorMessage, 1;
 end
 
 if SERVERPROPERTY('EngineEdition') <> 3 
 begin
-	set @errorMessage = (N'Your SQL Server 2014 Edition is not an Enterprise or a Developer Edition: Your are running a ' + @SQLServerEdition);
+	set @errorMessage = (N'Your SQL Server 2016 Edition is not an Enterprise or a Developer Edition: Your are running a ' + @SQLServerEdition);
 	Throw 51000, @errorMessage, 1;
 end
 
@@ -1064,7 +1057,7 @@ if NOT EXISTS (select * from sys.objects where type = 'p' and name = 'memopt_Get
 GO
 
 /*
-	Memory Optimised Library for SQL Server 2014: 
+	Memory Optimised Library for SQL Server 2016: 
 	Shows details for the Memory Optimised Tables within the database
 	Version: 0.2.0, November 2016
 */
@@ -1092,23 +1085,25 @@ begin
 				WHERE tab.object_id = ind.object_id 
 					AND ind.data_space_id = 0
 					AND ind.type = 7) as 'Hash Indexes',
-		ISNULL(SUM(st.rows),0) as 'Rows Count',
-		cast(max(st.last_updated) as datetime2(0))as StatsUpdated,
+		(SELECT COUNT(*) FROM sys.indexes ind
+			WHERE tab.object_id = ind.object_id 
+				AND ind.data_space_id = 0
+				AND ind.type in (5,6) ) as 'Columnstore',
+		ISNULL(MAX(part.rows),0) as 'Rows Count',
 		max(cast((memStats.memory_allocated_for_table_kb + memStats.memory_allocated_for_indexes_kb) / 1024.  as decimal(9,2))) as ReservedInMB,
 		max(cast(memStats.memory_allocated_for_table_kb / 1024.  as decimal(9,2))) as TableAllocatedInMB,
 		max(cast(memStats.memory_allocated_for_indexes_kb / 1024.  as decimal(9,2))) as IndexesAllocatedInMB,
 	
 		max(cast(memStats.memory_used_by_table_kb / 1024.  as decimal(9,2))) as TableUsedInMB,
 		max(cast(memStats.memory_used_by_indexes_kb / 1024.  as decimal(9,2))) as IndexesUsedInMB,
-		--(SELECT cast(SUM(allocated_bytes) / 1024. / 1024 as decimal(9,2)) 
-		--	FROM sys.dm_db_xtp_memory_consumers memCons
-		--	WHERE memCons.object_id = tab.object_id
-		--	GROUP BY OBJECT_NAME(memCons.object_id)) as AllocatedMemoryInMB,
-		--(SELECT cast(SUM(used_bytes) / 1024. / 1024 as decimal(9,2)) 
-		--	FROM sys.dm_db_xtp_memory_consumers memCons
-		--	WHERE memCons.object_id = tab.object_id
-		--	GROUP BY OBJECT_NAME(memCons.object_id)) as UsedMemoryInMB,
-		'false' as MetaDataUpdatable
+
+		case (SELECT COUNT(*) FROM sys.indexes ind
+			WHERE tab.object_id = ind.object_id 
+				AND ind.data_space_id = 0
+				AND ind.type in (5,6) ) 
+			when 0 then 'true' 
+			else 'false'
+		end	as MetaDataUpdatable
 		FROM sys.tables tab
 			INNER JOIN sys.partitions part with(READUNCOMMITTED)
 				on tab.object_id = part.object_id 
@@ -1118,23 +1113,24 @@ begin
 				on tab.object_id = memStats.object_id
 			LEFT JOIN sys.indexes ind
 				on tab.object_id = ind.object_id AND ind.is_primary_key = 1
-			OUTER APPLY sys.dm_db_stats_properties (tab.object_id,ind.index_id) st
 		WHERE tab.is_memory_optimized = 1
 			AND tab.durability_desc = ISNULL(case @Durability WHEN 'Schema & Data' THEN 'SCHEMA_AND_DATA' WHEN 'Schema' THEN 'SCHEMA_ONLY' ELSE NULL end, tab.durability_desc)
 			AND ISNULL(ind.type_desc,'None') =  coalesce(@pkType,ind.type_desc,'None')
 			AND (@tableName is null or object_name(tab.object_id) like '%' + @tableName + '%')
 			AND (@schemaName is null or object_schema_name(tab.schema_id) = @schemaName)
 		GROUP BY tab.object_id, tab.name, tab.durability_desc, ind.type_desc
-		HAVING ISNULL(SUM(st.rows),0) >= @minRows
+		HAVING ISNULL(MAX(part.rows),0) >= @minRows
 			AND MAX((memStats.memory_allocated_for_table_kb + memStats.memory_allocated_for_indexes_kb) / 1024.) >= @minReservedSizeInGB
 		ORDER BY max(cast((memStats.memory_allocated_for_table_kb + memStats.memory_allocated_for_indexes_kb) / 1024.  as decimal(9,2))) desc
+
+
 
 END
 
 GO
 
 /*
-	Memory Optimised Library for SQL Server 2014: 
+	Memory Optimised Library for SQL Server 2016: 
 	Suggested Tables - Shows details for the suggessted Memory Optimised Tables within the database
 	Version: 0.2.0, November 2016
 
@@ -1157,16 +1153,16 @@ declare @SQLServerVersion nvarchar(128) = cast(SERVERPROPERTY('ProductVersion') 
 		@SQLServerEdition nvarchar(128) = cast(SERVERPROPERTY('Edition') as NVARCHAR(128));
 declare @errorMessage nvarchar(512);
 
- --Ensure that we are running SQL Server 2014
-if substring(@SQLServerVersion,1,CHARINDEX('.',@SQLServerVersion)-1) <> N'12'
+ --Ensure that we are running SQL Server 2016
+if substring(@SQLServerVersion,1,CHARINDEX('.',@SQLServerVersion)-1) <> N'13'
 begin
-	set @errorMessage = (N'You are not running a SQL Server 2014. Your SQL Server version is ' + @SQLServerVersion);
+	set @errorMessage = (N'You are not running a SQL Server 2016. Your SQL Server version is ' + @SQLServerVersion);
 	Throw 51000, @errorMessage, 1;
 end
 
 if SERVERPROPERTY('EngineEdition') <> 3 
 begin
-	set @errorMessage = (N'Your SQL Server 2014 Edition is not an Enterprise or a Developer Edition: Your are running a ' + @SQLServerEdition);
+	set @errorMessage = (N'Your SQL Server 2016 Edition is not an Enterprise or a Developer Edition: Your are running a ' + @SQLServerEdition);
 	Throw 51000, @errorMessage, 1;
 end
 
@@ -1176,7 +1172,7 @@ if NOT EXISTS (select * from sys.objects where type = 'p' and name = 'memopt_Sug
 GO
 
 /*
-	Memory Optimised Library for SQL Server 2014: 
+	Memory Optimised Library for SQL Server 2016: 
 	Shows details for the Memory Optimised Tables within the database
 	Version: 0.2.0, November 2016
 */
@@ -1193,19 +1189,8 @@ alter procedure dbo.memopt_SuggestedTables(
 begin
 	set nocount on;
 
-
-	declare 
-		@isEncrypted tinyint = 0;
-
-	-- Check if the database is encrypted with TDE
-	select
-		@isEncrypted = is_encrypted
-		from sys.databases
-		where database_id = DB_ID();
-
 	-- Returns tables suggested for using Memory-Optimised
-	if OBJECT_ID('tempdb..#TablesToInMemory') IS NOT NULL
-		drop table #TablesToInMemory;
+	DROP TABLE IF EXISTS #TablesToInMemory;
 
 	create table #TablesToInMemory(
 		[ObjectId] int NOT NULL PRIMARY KEY,
@@ -1230,7 +1215,6 @@ begin
 		[Foreign Keys] smallint NOT NULL,
 		[Constraints] smallint NOT NULL,
 		[Triggers] smallint NOT NULL,
-		[TDE] tinyint NOT NULL,
 		[CDC] tinyint NOT NULL,
 		[CT] tinyint NOT NULL,
 		[Replication] tinyint NOT NULL,
@@ -1270,8 +1254,6 @@ begin
 						 (UPPER(tp.name) in ('IMAGE','TEXT','NTEXT','TIMESTAMP','HIERARCHYID','SQL_VARIANT','XML','GEOGRAPHY','GEOMETRY','DATETIMEOFFSET','UNIQUEIDENTIFIER') OR
 						  (UPPER(tp.name) in ('VARCHAR','NVARCHAR','CHAR','NCHAR','BINARY','VARBINARY') and (col.max_length = 8000 or col.max_length = -1)) 
 						 )
-						 OR (col.collation_name is not null AND col.collation_name not like '%_bin2')
-						 OR (COLLATIONPROPERTY(col.collation_name, 'CodePage') <> 1252)
 						 OR ( col.is_computed = 1 )
 					 )
 		   ) as 'Unsupported'
@@ -1318,7 +1300,6 @@ begin
 		, (select count(*)
 				from sys.objects
 				where UPPER(type) in ('TA','TR') AND parent_object_id = t.object_id ) as 'Triggers'
-		, @isEncrypted as 'TDE'
 		, t.is_tracked_by_cdc as 'CDC'
 		, (select count(*) 
 				from sys.change_tracking_tables ctt with(READUNCOMMITTED)
@@ -1353,17 +1334,15 @@ begin
 										 (UPPER(tp.name) in ('IMAGE','TEXT','NTEXT','TIMESTAMP','HIERARCHYID','SQL_VARIANT','XML','GEOGRAPHY','GEOMETRY','DATETIMEOFFSET','UNIQUEIDENTIFIER') OR
 										  (UPPER(tp.name) in ('VARCHAR','NVARCHAR','CHAR','NCHAR','BINARY','VARBINARY') and (col.max_length = 8000 or col.max_length = -1)) 
 										 )
-										 OR (col.collation_name is not null AND col.collation_name not like '%_bin2')
-										 OR (COLLATIONPROPERTY(col.collation_name, 'CodePage') <> 1252)
 										 OR ( col.is_computed = 1 )
 				 						) ) = 0 
 					and (select count(*)
-							from tempdb.sys.objects so
-								where UPPER(so.type) in ('PK','F','UQ','C','TA','TR') and parent_object_id = t.object_id ) = 0
+							from sys.objects so
+							where UPPER(so.type) in ('PK','F','UQ','TA','TR') and parent_object_id = t.object_id ) = 0
 					and (select count(*)
-							from tempdb.sys.indexes ind
+							from sys.indexes ind
 							where t.object_id = ind.object_id
-								and ind.type in (3,4,5,6) ) = 0			/* XML, Spatial, Columnstore CCI & NCCI */
+								and ind.type in (3,4) ) = 0
 					and (select count(*) 
 							from sys.change_tracking_tables ctt with(READUNCOMMITTED)
 							where ctt.object_id = t.object_id and ctt.is_track_columns_updated_on = 1 
@@ -1373,7 +1352,6 @@ begin
 					and t.is_replicated = 0
 					and coalesce(t.filestream_data_space_id,0,1) = 0
 					and t.is_filetable = 0
-					and @isEncrypted = 0
 				  )
 				 or @showReadyTablesOnly = 0)
 		group by t.object_id, ind.data_space_id, t.is_tracked_by_cdc, t.is_memory_optimized, t.is_filetable, t.is_replicated, t.filestream_data_space_id
@@ -1419,8 +1397,6 @@ begin
 						 (UPPER(tp.name) in ('IMAGE','TEXT','NTEXT','TIMESTAMP','HIERARCHYID','SQL_VARIANT','XML','GEOGRAPHY','GEOMETRY','DATETIMEOFFSET','UNIQUEIDENTIFIER') OR
 						  (UPPER(tp.name) in ('VARCHAR','NVARCHAR','CHAR','NCHAR','BINARY','VARBINARY') and (col.max_length = 8000 or col.max_length = -1)) 
 						 )
-						 OR (col.collation_name is not null AND col.collation_name not like '%_bin2')
-						 OR (COLLATIONPROPERTY(col.collation_name, 'CodePage') <> 1252)
 						 OR ( col.is_computed = 1 )
 					 )
 		   ) as 'Unsupported'
@@ -1467,7 +1443,6 @@ begin
 		, (select count(*)
 				from tempdb.sys.objects
 				where UPPER(type) in ('TA','TR') AND parent_object_id = t.object_id ) as 'Triggers'
-		, @isEncrypted as 'TDE'
 		, t.is_tracked_by_cdc as 'CDC'
 		, (select count(*) 
 				from tempdb.sys.change_tracking_tables ctt with(READUNCOMMITTED)
@@ -1493,20 +1468,17 @@ begin
 										on col.user_type_id = tp.user_type_id
 								where t.object_id = col.object_id AND 
 									 (
-										 (UPPER(tp.name) in ('IMAGE','TEXT','NTEXT','TIMESTAMP','HIERARCHYID','SQL_VARIANT','XML','GEOGRAPHY','GEOMETRY','DATETIMEOFFSET','UNIQUEIDENTIFIER') OR
-										  (UPPER(tp.name) in ('VARCHAR','NVARCHAR','CHAR','NCHAR','BINARY','VARBINARY') and (col.max_length = 8000 or col.max_length = -1)) 
+										 (UPPER(tp.name) in ('IMAGE','TEXT','NTEXT','TIMESTAMP','HIERARCHYID','SQL_VARIANT','XML','GEOGRAPHY','GEOMETRY','DATETIMEOFFSET','UNIQUEIDENTIFIER') 
 										 )
-										 OR (col.collation_name is not null AND col.collation_name not like '%_bin2')
-										 OR (COLLATIONPROPERTY(col.collation_name, 'CodePage') <> 1252)
 										 OR ( col.is_computed = 1 )
 				 						) ) = 0 
 					and (select count(*)
 							from tempdb.sys.objects so
-								where UPPER(so.type) in ('PK','F','UQ','C','TA','TR') and parent_object_id = t.object_id ) = 0
+							where UPPER(so.type) in ('PK','F','UQ','TA','TR') and parent_object_id = t.object_id ) = 0
 					and (select count(*)
 							from tempdb.sys.indexes ind
 							where t.object_id = ind.object_id
-								and ind.type in (3,4,5,6) ) = 0			/* XML, Spatial, Columnstore CCI & NCCI */
+								and ind.type in (3,4) ) = 0
 					and (select count(*) 
 							from tempdb.sys.change_tracking_tables ctt with(READUNCOMMITTED)
 							where ctt.object_id = t.object_id and ctt.is_track_columns_updated_on = 1 
@@ -1539,7 +1511,7 @@ begin
 		, [Clustered Index] as CI, [Nonclustered Indexes] as NCI
 		, isnull([Columnstore],'none') as [Columnstore]
 		, [XML Indexes], [Spatial Indexes], [Primary Key], [Foreign Keys], [Constraints]
-		, [Triggers], [TDE], [CDC], [CT], [Replication], [FileStream], [FileTable]
+		, [Triggers], [CDC], [CT], [Replication], [FileStream], [FileTable]
 		from #TablesToInMemory
 		order by [Size in GB] desc;
 
@@ -1561,11 +1533,85 @@ begin
 						(UPPER(tp.name) in ('VARCHAR','NVARCHAR','CHAR','NCHAR') and (col.max_length = 8000 or col.max_length = -1)) 
 						) 
 						OR col.is_computed = 1 
-						OR (col.collation_name is not null AND col.collation_name not like '%_bin2')
-						OR (COLLATIONPROPERTY(col.collation_name, 'CodePage') <> 1252)
 					  )
 				 and t.object_id in (select ObjectId from #TablesToInMemory);
 	end
+
+	--if( @showTSQLCommandsBeta = 1 ) 
+	--begin
+		--select coms.TableName, coms.[TSQL Command], coms.[type] 
+		--	from (
+		--		select t.TableName, 
+		--				'create ' + @columnstoreIndexTypeForTSQL + ' columnstore index ' + 
+		--				case @columnstoreIndexTypeForTSQL when 'Clustered' then 'CCI' when 'Nonclustered' then 'NCCI' end 
+		--				+ '_' + t.[ShortTableName] + 
+		--				' on ' + t.TableName + case @columnstoreIndexTypeForTSQL when 'Nonclustered' then '()' else '' end + ';' as [TSQL Command]
+		--			   , 'CCL' as type,
+		--			   101 as [Sort Order]
+		--			from #TablesToInMemory t
+		--		union all
+		--		select t.TableName, 'alter table ' + t.TableName + ' drop constraint ' + (quotename(so.name) collate SQL_Latin1_General_CP1_CI_AS) + ';' as [TSQL Command], [type], 
+		--			   case UPPER(type) when 'PK' then 100 when 'F' then 1 when 'UQ' then 100 end as [Sort Order]
+		--			from #TablesToInMemory t
+		--			inner join sys.objects so
+		--				on t.ObjectId = so.parent_object_id or t.ObjectId = so.object_id
+		--			where UPPER(type) in ('PK','F','UQ')
+		--		union all
+		--		select t.TableName, 'drop trigger ' + (quotename(so.name) collate SQL_Latin1_General_CP1_CI_AS) + ';' as [TSQL Command], type,
+		--			50 as [Sort Order]
+		--			from #TablesToInMemory t
+		--			inner join sys.objects so
+		--				on t.ObjectId = so.parent_object_id
+		--			where UPPER(type) in ('TR')
+		--		union all
+		--		select t.TableName, 'drop assembly ' + (quotename(so.name) collate SQL_Latin1_General_CP1_CI_AS) + ' WITH NO DEPENDENTS ;' as [TSQL Command], type,
+		--			50 as [Sort Order]
+		--			from #TablesToInMemory t
+		--			inner join sys.objects so
+		--				on t.ObjectId = so.parent_object_id
+		--			where UPPER(type) in ('TA')	
+		--		union all 
+		--		select t.TableName, 'drop index ' + (quotename(ind.name) collate SQL_Latin1_General_CP1_CI_AS) + ' on ' + t.TableName + ';' as [TSQL Command], 'CL' as type,
+		--			10 as [Sort Order]
+		--			from #TablesToInMemory t
+		--			inner join sys.indexes ind
+		--				on t.ObjectId = ind.object_id
+		--			where type = 1 and not exists
+		--				(select 1 from #TablesToInMemory t1
+		--					inner join sys.objects so1
+		--						on t1.ObjectId = so1.parent_object_id
+		--					where UPPER(so1.type) in ('PK','F','UQ')
+		--						and quotename(ind.name) <> quotename(so1.name))
+		--		union all 
+		--		select t.TableName, 'drop index ' + (quotename(ind.name) collate SQL_Latin1_General_CP1_CI_AS) + ' on ' + t.TableName + ';' as [TSQL Command], 'NC' as type,
+		--			10 as [Sort Order]
+		--			from #TablesToInMemory t
+		--			inner join sys.indexes ind
+		--				on t.ObjectId = ind.object_id
+		--			where type = 2 and not exists
+		--				(select * from #TablesToInMemory t1
+		--					inner join sys.objects so1
+		--						on t1.ObjectId = so1.parent_object_id 
+		--					where UPPER(so1.type) in ('PK','F','UQ')
+		--						and quotename(ind.name) <> quotename(so1.name) and t.ObjectId = t1.ObjectId )
+		--		union all 
+		--		select t.TableName, 'drop index ' + (quotename(ind.name) collate SQL_Latin1_General_CP1_CI_AS) + ' on ' + t.TableName + ';' as [TSQL Command], 'XML' as type,
+		--			10 as [Sort Order]
+		--			from #TablesToInMemory t
+		--			inner join sys.indexes ind
+		--				on t.ObjectId = ind.object_id
+		--			where type = 3
+		--		union all 
+		--		select t.TableName, 'drop index ' + (quotename(ind.name) collate SQL_Latin1_General_CP1_CI_AS) + ' on ' + t.TableName + ';' as [TSQL Command], 'SPAT' as type,
+		--			10 as [Sort Order]
+		--			from #TablesToInMemory t
+		--			inner join sys.indexes ind
+		--				on t.ObjectId = ind.object_id
+		--			where type = 4
+		--	) coms
+		--order by coms.type desc, coms.[Sort Order]; --coms.TableName 
+	
+	--end
 
 	drop table #TablesToInMemory; 
 
