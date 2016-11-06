@@ -1,5 +1,5 @@
 /*
-	Memory Optimised Library for SQL Server 2014: 
+	Memory Optimised Library for SQL Server 2016: 
 	Shows details for the Hash Indexes of the Memory Optimized Tables
 	Version: 0.2.0, November 2016
 
@@ -28,16 +28,16 @@ declare @SQLServerVersion nvarchar(128) = cast(SERVERPROPERTY('ProductVersion') 
 		@SQLServerEdition nvarchar(128) = cast(SERVERPROPERTY('Edition') as NVARCHAR(128));
 declare @errorMessage nvarchar(512);
 
- --Ensure that we are running SQL Server 2014
-if substring(@SQLServerVersion,1,CHARINDEX('.',@SQLServerVersion)-1) <> N'12'
+ --Ensure that we are running SQL Server 2016
+if substring(@SQLServerVersion,1,CHARINDEX('.',@SQLServerVersion)-1) <> N'13'
 begin
-	set @errorMessage = (N'You are not running a SQL Server 2014. Your SQL Server version is ' + @SQLServerVersion);
+	set @errorMessage = (N'You are not running a SQL Server 2016. Your SQL Server version is ' + @SQLServerVersion);
 	Throw 51000, @errorMessage, 1;
 end
 
 if SERVERPROPERTY('EngineEdition') <> 3 
 begin
-	set @errorMessage = (N'Your SQL Server 2014 Edition is not an Enterprise or a Developer Edition: Your are running a ' + @SQLServerEdition);
+	set @errorMessage = (N'Your SQL Server 2016 Edition is not an Enterprise or a Developer Edition: Your are running a ' + @SQLServerEdition);
 	Throw 51000, @errorMessage, 1;
 end
 
@@ -47,7 +47,7 @@ if NOT EXISTS (select * from sys.objects where type = 'p' and name = 'memopt_Get
 GO
 
 /*
-	Memory Optimised Library for SQL Server 2014: 
+	Memory Optimised Library for SQL Server 2016: 
 	Shows details for the Hash Indexes of the Memory Optimized Tables
 	Version: 0.2.0, November 2016
 */
@@ -68,21 +68,25 @@ begin
 	SELECT  
 		quotename(object_schema_name(t.object_id)) + '.' + quotename(object_name(t.object_id)) as TableName,   
 		i.name as IndexName,   
-		ISNULL(st.rows,0) as TotalRows,
-		cast(st.last_updated as DateTime2(0)) as StatsUpdated,
+		part.rows as TotalRows, 
 		h.total_bucket_count as TotalBuckets,  
-		h.empty_bucket_count as EmptyBuckets,  
+		h.empty_bucket_count as EmptyBuckets, 
 		CAST(( (h.empty_bucket_count * 1.) / h.total_bucket_count) * 100 as Decimal(9,3) ) as EmptyBucketPercent,  
 		h.avg_chain_length as AvgChainLength,   
 		h.max_chain_length as MaxChainLength
 		FROM sys.dm_db_xtp_hash_index_stats as h   
-			INNER JOIN sys.indexes  as i  
+			INNER JOIN sys.indexes as i  
 				ON h.object_id = i.object_id  
 			   AND h.index_id = i.index_id  
+			INNER JOIN sys.memory_optimized_tables_internal_attributes ia 
+				ON h.xtp_object_id = ia.xtp_object_id 
 			INNER JOIN sys.tables t 
 				ON h.object_id = t.object_id
-			OUTER APPLY sys.dm_db_stats_properties (i.object_id,i.index_id) st
-		WHERE h.avg_chain_length >= @minAvgChainLength
+			INNER JOIN sys.partitions part
+				ON part.object_id = i.object_id and part.index_id = i.index_id
+			--OUTER APPLY sys.dm_db_stats_properties (i.object_id,i.index_id) st
+		WHERE ia.type = 1 /* Index */
+			AND h.avg_chain_length >= @minAvgChainLength
 			AND h.max_chain_length >= @minMaxChainLrngth
 			AND ((h.empty_bucket_count * 1.) / h.total_bucket_count) * 100 >= ISNULL( @minEmptyBucketPercent, 0 )
 			AND ((h.empty_bucket_count * 1.) / h.total_bucket_count) * 100 <= ISNULL( @maxEmptyBucketPercent, 100 )
@@ -90,6 +94,7 @@ begin
 			AND (@tableName is null or object_name(t.object_id) like '%' + @tableName + '%')
 			AND (@schemaName is null or schema_name(t.schema_id) = @schemaName)
 		ORDER BY tableName, indexName;  
+ 
 
 END
 

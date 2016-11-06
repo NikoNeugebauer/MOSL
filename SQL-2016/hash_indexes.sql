@@ -66,7 +66,6 @@ SELECT
 			ON h.object_id = t.object_id
 		INNER JOIN sys.partitions part
 			ON part.object_id = i.object_id and part.index_id = i.index_id
-		--OUTER APPLY sys.dm_db_stats_properties (i.object_id,i.index_id) st
 	WHERE ia.type = 1 /* Index */
 		AND h.avg_chain_length >= @minAvgChainLength
 		AND h.max_chain_length >= @minMaxChainLrngth
