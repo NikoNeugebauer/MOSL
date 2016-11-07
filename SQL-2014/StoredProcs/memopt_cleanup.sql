@@ -1,5 +1,5 @@
 /*
-	Memory Optimised Library for SQL Server 2014: 
+	Memory Optimised Scripts Library for SQL Server 2014: 
 	Cleanup - This script removes from the current database all MOSL Stored Procedures that were previously installed there
 	Version: 0.2.0, November 2016
 

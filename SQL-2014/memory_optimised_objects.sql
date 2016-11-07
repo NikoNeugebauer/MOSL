@@ -1,5 +1,5 @@
 /*
-	Memory Optimised Library for SQL Server 2014: 
+	Memory Optimised Scripts Library for SQL Server 2014: 
 	Shows details for the Memory Optimised Objects within the database
 	Version: 0.2.0, November 2016
 

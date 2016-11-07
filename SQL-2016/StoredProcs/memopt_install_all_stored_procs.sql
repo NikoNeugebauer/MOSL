@@ -1,5 +1,5 @@
 /*
-	Memory Optimised Library for SQL Server 2016: 
+	Memory Optimised Scripts Library for SQL Server 2016: 
 	Shows details for the Checkpoint Pair Files
 	Version: 0.2.0, November 2016
 
@@ -41,7 +41,7 @@ if NOT EXISTS (select * from sys.objects where type = 'p' and name = 'memopt_Get
 GO
 
 /*
-	Memory Optimised Library for SQL Server 2016: 
+	Memory Optimised Scripts Library for SQL Server 2016: 
 	Shows details for the Checkpoint Pair Files
 	Version: 0.2.0, November 2016
 */
@@ -137,7 +137,7 @@ GO
 
 
 /*
-	Memory Optimised Library for SQL Server 2016: 
+	Memory Optimised Scripts Library for SQL Server 2016: 
 	Shows details for the Database Configuration
 	Version: 0.2.0, November 2016
 
@@ -185,7 +185,7 @@ if NOT EXISTS (select * from sys.objects where type = 'p' and name = 'memopt_Get
 GO
 
 /*
-	Memory Optimised Library for SQL Server 2016: 
+	Memory Optimised Scripts Library for SQL Server 2016: 
 	Shows details for the Database Configuration
 	Version: 0.2.0, November 2016
 */
@@ -259,7 +259,7 @@ END
 
 GO
 /*
-	Memory Optimised Library for SQL Server 2016: 
+	Memory Optimised Scripts Library for SQL Server 2016: 
 	Shows details for the Garbage Collector
 	Version: 0.2.0, November 2016
 
@@ -307,7 +307,7 @@ if NOT EXISTS (select * from sys.objects where type = 'p' and name = 'memopt_Get
 GO
 
 /*
-	Memory Optimised Library for SQL Server 2016: 
+	Memory Optimised Scripts Library for SQL Server 2016: 
 	Shows details for the Garbage Collector
 	Version: 0.2.0, November 2016
 */
@@ -348,7 +348,7 @@ END
 
 GO
 /*
-	Memory Optimised Library for SQL Server 2016: 
+	Memory Optimised Scripts Library for SQL Server 2016: 
 	Shows details for the Hash Indexes of the Memory Optimized Tables
 	Version: 0.2.0, November 2016
 
@@ -396,7 +396,7 @@ if NOT EXISTS (select * from sys.objects where type = 'p' and name = 'memopt_Get
 GO
 
 /*
-	Memory Optimised Library for SQL Server 2016: 
+	Memory Optimised Scripts Library for SQL Server 2016: 
 	Shows details for the Hash Indexes of the Memory Optimized Tables
 	Version: 0.2.0, November 2016
 */
@@ -449,7 +449,7 @@ END
 
 GO
 /*
-	Memory Optimised Library for SQL Server 2016: 
+	Memory Optimised Scripts Library for SQL Server 2016: 
 	Shows details for the Loaded Memory Optimized Modules
 	Version: 0.2.0, November 2016
 
@@ -497,7 +497,7 @@ if NOT EXISTS (select * from sys.objects where type = 'p' and name = 'memopt_Get
 GO
 
 /*
-	Memory Optimised Library for SQL Server 2016: 
+	Memory Optimised Scripts Library for SQL Server 2016: 
 	Shows details for the Loaded Memory Optimized Modules
 	Version: 0.2.0, November 2016
 */
@@ -554,7 +554,7 @@ END
 GO
 
 /*
-	Memory Optimised Library for SQL Server 2016: 
+	Memory Optimised Scripts Library for SQL Server 2016: 
 	Shows details for the Memory Optimised Objects within the database
 	Version: 0.2.0, November 2016
 
@@ -602,7 +602,7 @@ if NOT EXISTS (select * from sys.objects where type = 'p' and name = 'memopt_Get
 GO
 
 /*
-	Memory Optimised Library for SQL Server 2016: 
+	Memory Optimised Scripts Library for SQL Server 2016: 
 	Shows details for the Memory Optimised Objects within the database
 	Version: 0.2.0, November 2016
 */
@@ -757,7 +757,7 @@ END
 
 GO
 /*
-	Memory Optimised Library for SQL Server 2016: 
+	Memory Optimised Scripts Library for SQL Server 2016: 
 	SQL Server Instance Information - Provides with the list of the known SQL Server versions that have bugfixes or improvements over your current version + lists currently enabled trace flags on the instance & session
 	Version: 0.2.0, November 2016
 
@@ -804,7 +804,7 @@ if NOT EXISTS (select * from sys.objects where type = 'p' and name = 'memopt_Get
 GO
 
 /*
-	Memory Optimised Library for SQL Server 2016: 
+	Memory Optimised Scripts Library for SQL Server 2016: 
 	SQL Server Instance Information - Provides with the list of the known SQL Server versions that have bugfixes or improvements over your current version + lists currently enabled trace flags on the instance & session
 	Version: 0.2.0, November 2016
 */
@@ -1009,7 +1009,7 @@ END
 
 GO
 /*
-	Memory Optimised Library for SQL Server 2016: 
+	Memory Optimised Scripts Library for SQL Server 2016: 
 	Shows details for the Memory Optimised Tables within the database
 	Version: 0.2.0, November 2016
 
@@ -1057,7 +1057,7 @@ if NOT EXISTS (select * from sys.objects where type = 'p' and name = 'memopt_Get
 GO
 
 /*
-	Memory Optimised Library for SQL Server 2016: 
+	Memory Optimised Scripts Library for SQL Server 2016: 
 	Shows details for the Memory Optimised Tables within the database
 	Version: 0.2.0, November 2016
 */
@@ -1130,7 +1130,7 @@ END
 GO
 
 /*
-	Memory Optimised Library for SQL Server 2016: 
+	Memory Optimised Scripts Library for SQL Server 2016: 
 	Suggested Tables - Shows details for the suggessted Memory Optimised Tables within the database
 	Version: 0.2.0, November 2016
 
@@ -1172,7 +1172,7 @@ if NOT EXISTS (select * from sys.objects where type = 'p' and name = 'memopt_Sug
 GO
 
 /*
-	Memory Optimised Library for SQL Server 2016: 
+	Memory Optimised Scripts Library for SQL Server 2016: 
 	Shows details for the Memory Optimised Tables within the database
 	Version: 0.2.0, November 2016
 */

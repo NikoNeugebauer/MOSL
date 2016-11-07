@@ -1,5 +1,5 @@
 /*
-	Memory Optimised Library for SQL Server 2016: 
+	Memory Optimised Scripts Library for SQL Server 2016: 
 	Shows details for the Checkpoint Pair Files
 	Version: 0.2.0, November 2016
 

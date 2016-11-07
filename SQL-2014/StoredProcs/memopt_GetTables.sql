@@ -1,5 +1,5 @@
 /*
-	Memory Optimised Library for SQL Server 2014: 
+	Memory Optimised Scripts Library for SQL Server 2014: 
 	Shows details for the Memory Optimised Tables within the database
 	Version: 0.2.0, November 2016
 
@@ -47,7 +47,7 @@ if NOT EXISTS (select * from sys.objects where type = 'p' and name = 'memopt_Get
 GO
 
 /*
-	Memory Optimised Library for SQL Server 2014: 
+	Memory Optimised Scripts Library for SQL Server 2014: 
 	Shows details for the Memory Optimised Tables within the database
 	Version: 0.2.0, November 2016
 */

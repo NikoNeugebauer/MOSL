@@ -1,5 +1,5 @@
 /*
-	Memory Optimised Library for SQL Server 2014: 
+	Memory Optimised Scripts Library for SQL Server 2014: 
 	Suggested Tables - Shows details for the suggessted Memory Optimised Tables within the database
 	Version: 0.2.0, November 2016
 
